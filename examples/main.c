@@ -47,7 +47,7 @@ int main(void) {
 
 	/*** etc ***/
 
-	const char *image_file = "test.png";
+	const char *image_file = "control_2x.png";
 
 	int w, h, channels;
 	unsigned char *pixels = stbi_load(image_file, &w, &h, &channels, 4);
