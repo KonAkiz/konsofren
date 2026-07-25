@@ -51,7 +51,8 @@ int main(void) {
 		}
 
 		/*** draw tests ***/
-		kon_clearFramebuffer(fb, KON_BACKGROUND_COLOR);
+		kon_clearFramebuffer(fb, 0x00000000);
+
 		kon_drawRectangle(fb, 400, 300, 50, 50, 0xFFA500FF);
 		kon_fillRectangle(fb, 20, 20, 50, 50, 0xFFA500FF);
 		kon_drawLine(fb, 300, 100, 100, 250, 0xFFFFFFFF);
