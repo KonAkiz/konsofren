@@ -25,7 +25,7 @@ typedef kon_framebuffer_t kon_image;
 
 typedef enum kon_imageFormat {
 	konFormatRGBA8 = 0,
-	konFormatBGRA9,
+	konFormatBGRA8,
 } kon_imageFormat_t;
 
 kon_image *kon_loadImage(const uint8_t *pixels, int width, int height, kon_imageFormat_t format);
