@@ -10,15 +10,15 @@ CFLAGS=-Wall -Wextra -Werror -pedantic -std=c99
 
 INC=-I.
 
-LIBS=-L.
+LIBS=-L. -lm -lX11 -lXrandr
 
 .PHONY: test
 
 ${TARGET}: ${OBJ}
-	${CC} ${OBJ} -o ${TARGET} ${CFLAGS}
+	${CC} ${OBJ} -o ${TARGET} ${CFLAGS} ${INC} ${LIBS}
 
 %.o: %.c
-	${CC} -c ${CFLAGS} $< -o $@
+	${CC} -c ${CFLAGS} $< -o $@ ${INC}
 
 test: ${TARGET}
 	@./${TARGET}

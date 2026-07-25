@@ -1,18 +1,38 @@
 #include <stdio.h>
 
+/* using this for creating windows to see results */
+#define RGFW_IMPLEMENTATION
+#include "RGFW.h"
+
 #define KONSOFREN_IMPLEMENTATION
 #include "konsofren.h"
 
 #define EXIT_SUCCESS 0
 
-int main(void) {
-	kon_framebuffer_t *fb;
+#define WINDOW_TITLE "konsofren test - using RGFW"
+#define WINDOW_W 640
+#define WINDOW_H 480
 
-	fb = kon_createFramebuffer(640, 480);
+int main(void) {
+	RGFW_init("konsofren test", 0);
+	RGFW_window *win = RGFW_createWindow(WINDOW_TITLE, 0, 0, WINDOW_W, WINDOW_H, RGFW_windowCenter | RGFW_windowTransparent);
+	RGFW_window_setExitKey(win, RGFW_keyQ);
+
+	kon_framebuffer_t *fb = kon_createFramebuffer(WINDOW_W, WINDOW_H);
+
+	kon_putPixel(fb, 20, 20, 0xFFFFFFFF);
+
+	RGFW_surface *surface = RGFW_window_createSurface(win, (u8*)fb->data, fb->width, fb->height, RGFW_formatABGR8);
+
+	while (RGFW_window_shouldClose(win) == RGFW_FALSE) {
+		RGFW_pollEvents();
+		RGFW_window_blitSurface(win, surface);
+	}
 
 	puts("Hello, World!");
 
 	kon_freeFramebuffer(fb);
+	RGFW_window_close(win);
 
 	return EXIT_SUCCESS;
 }
