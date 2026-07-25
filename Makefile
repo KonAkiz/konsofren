@@ -6,7 +6,7 @@ OBJ=$(SRC:.c=.o)
 
 TARGET=program
 
-CFLAGS=-Wall -Wextra -Werror -std=c99
+CFLAGS=-Wall -Wextra -Werror -pedantic -std=c99
 
 INC=-I.
 
@@ -15,7 +15,7 @@ LIBS=-L.
 .PHONY: test
 
 ${TARGET}: ${OBJ}
-	${CC} ${SRC} -o ${TARGET} ${CFLAGS}
+	${CC} ${OBJ} -o ${TARGET} ${CFLAGS}
 
 %.o: %.c
 	${CC} -c ${CFLAGS} $< -o $@

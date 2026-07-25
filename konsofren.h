@@ -17,7 +17,7 @@ void kon_putPixel(kon_framebuffer_t *fb, int x, int y, uint32_t color);
 
 #ifdef KONSOFREN_IMPLEMENTATION
 
-kon_framebuffer_t *koncreate_Framebuffer(int width, int height) {
+kon_framebuffer_t *kon_createFramebuffer(int width, int height) {
 	kon_framebuffer_t *fb = malloc(sizeof(kon_framebuffer_t));
 	fb->width = width;
 	fb->height = height;
