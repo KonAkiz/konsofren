@@ -47,13 +47,16 @@ int main(void) {
 
 	/*** etc ***/
 
+	const char *image_file = "test.png";
+
 	int w, h, channels;
-	unsigned char *pixels = stbi_load("test.png", &w, &h, &channels, 4);
+	unsigned char *pixels = stbi_load(image_file, &w, &h, &channels, 4);
 	if (!pixels) {
 		RGFW_surface_free(surface);
 		kon_freeFramebuffer(fb);
 		RGFW_window_close(win);
 		RGFW_deinit();
+		printf("stbi_load: error loading image \"%s\"", image_file);
 		return 1;
 	}
 
