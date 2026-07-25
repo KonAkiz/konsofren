@@ -31,6 +31,8 @@ typedef enum kon_imageFormat {
 kon_image *kon_loadImage(const uint8_t *pixels, int width, int height, kon_imageFormat_t format);
 void kon_freeImage(kon_image *image);
 
+void kon_drawImage(kon_framebuffer_t *fb, int x, int y, int width, int height, kon_image *image);
+
 /*** draw function declarations ***/
 
 void kon_drawRectangle(kon_framebuffer_t *fb, int x, int y, int width, int height, uint32_t color);
@@ -277,6 +279,25 @@ void kon_freeImage(kon_image *image) {
 	kon_freeFramebuffer(image);
 }
 
-#endif
+/* TODO */
+/* width and height aren't used yet */
+/* they'll be used later for scaling images */
+void kon_drawImage(kon_framebuffer_t *fb, int x, int y, int width, int height, kon_image *image) {
+	if (!fb || !image) return;
 
+	/* just trying to not draw when it's unnecessary */
+	if (image->width <= 0 || image->height <= 0) return;
+	if (width <= 0 || height <= 0) return;
+	if (x > fb->width || y > fb->height) return;
+
+	/* using this loop to make sure we only the parts of the image that are on screen */
+	for (int iy = 0; iy < image->height; iy++) {
+		for (int ix = 0; ix < image->width; ix++) {
+			uint32_t color = image->data[iy * image->width + ix];
+			kon_putPixel(fb, x+ix, y+iy, color);
+		}
+	}
+}
+
+#endif
 #endif
