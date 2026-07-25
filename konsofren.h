@@ -19,6 +19,18 @@ void kon_putPixel(kon_framebuffer_t *fb, int x, int y, uint32_t color);
 void kon_clearFramebuffer(kon_framebuffer_t *fb, uint32_t color);
 void kon_resizeFramebuffer(kon_framebuffer_t *fb, int width, int height);
 
+/*** image declarations ***/
+
+typedef kon_framebuffer_t kon_image;
+
+typedef enum kon_imageFormat {
+	konFormatRGBA8 = 0,
+	konFormatBGRA9,
+} kon_imageFormat_t;
+
+kon_image *kon_loadImage(const uint8_t *pixels, int width, int height, kon_imageFormat_t format);
+void kon_freeImage(kon_image *image);
+
 /*** draw function declarations ***/
 
 void kon_drawRectangle(kon_framebuffer_t *fb, int x, int y, int width, int height, uint32_t color);
