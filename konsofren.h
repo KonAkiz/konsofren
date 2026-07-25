@@ -11,7 +11,6 @@
 typedef struct kon_framebuffer {
 	int width, height;
 	uint32_t *data;
-	uint32_t backgroundColor;
 } kon_framebuffer_t;
 
 kon_framebuffer_t *kon_createFramebuffer(int width, int height);
@@ -45,9 +44,6 @@ kon_framebuffer_t *kon_createFramebuffer(int width, int height) {
 
 	fb->width = width;
 	fb->height = height;
-	fb->backgroundColor = KON_BACKGROUND_COLOR;
-
-	kon_clearFramebuffer(fb, fb->backgroundColor);
 	return fb;
 }
 
@@ -106,8 +102,6 @@ void kon_resizeFramebuffer(kon_framebuffer_t *fb, int width, int height) {
 	fb->data = tmp;
 	fb->width  = width;
 	fb->height = height;
-
-	kon_clearFramebuffer(fb, fb->backgroundColor);
 }
 
 /*** draw functions implementation ***/
