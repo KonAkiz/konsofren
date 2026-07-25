@@ -51,6 +51,7 @@ int main(void) {
 		}
 		kon_clearFramebuffer(fb, KON_BACKGROUND_COLOR);
 		kon_drawRectangle(fb, 20, 20, 50, 50, 0XFFA500FF);
+		kon_drawLine(fb, 300, 100, 100, 250, 0xFFFFFFFF);
 
 		RGFW_window_blitSurface(win, surface);
 	}
