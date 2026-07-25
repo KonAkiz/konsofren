@@ -279,9 +279,6 @@ void kon_freeImage(kon_image *image) {
 	kon_freeFramebuffer(image);
 }
 
-/* TODO */
-/* width and height aren't used yet */
-/* they'll be used later for scaling images */
 void kon_drawImage(kon_framebuffer_t *fb, int x, int y, int width, int height, kon_image *image) {
 	if (!fb || !image) return;
 
@@ -291,9 +288,12 @@ void kon_drawImage(kon_framebuffer_t *fb, int x, int y, int width, int height, k
 	if (x > fb->width || y > fb->height) return;
 
 	/* using this loop to make sure we only the parts of the image that are on screen */
-	for (int iy = 0; iy < image->height; iy++) {
-		for (int ix = 0; ix < image->width; ix++) {
-			uint32_t color = image->data[iy * image->width + ix];
+	for (int iy = 0; iy < height; iy++) {
+		for (int ix = 0; ix < width; ix++) {
+			int src_x = ix * image->width  / width;
+			int src_y = iy * image->height / height;
+
+			uint32_t color = image->data[src_y * image->width + src_x];
 			kon_putPixel(fb, x+ix, y+iy, color);
 		}
 	}
