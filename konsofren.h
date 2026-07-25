@@ -23,6 +23,7 @@ void kon_resizeFramebuffer(kon_framebuffer_t *fb, int width, int height);
 /*** draw function declarations ***/
 
 void kon_drawRectangle(kon_framebuffer_t *fb, int x, int y, int width, int height, uint32_t color);
+void kon_fillRectangle(kon_framebuffer_t *fb, int x, int y, int width, int height, uint32_t color);
 void kon_drawLine(kon_framebuffer_t *fb, int x0, int y0, int x1, int y1, uint32_t color);
 void kon_drawCircle(kon_framebuffer_t *fb, int center_x, int center_y, int radius, uint32_t color);
 
@@ -89,6 +90,15 @@ void kon_resizeFramebuffer(kon_framebuffer_t *fb, int width, int height) {
 /*** draw functions implementation ***/
 
 void kon_drawRectangle(kon_framebuffer_t *fb, int x, int y, int width, int height, uint32_t color) {
+	if (!fb) return;
+
+	kon_drawLine(fb, x, y, x + width, y, color);
+	kon_drawLine(fb, x, y + height, x + width, y + height, color);
+	kon_drawLine(fb, x, y, x, y + height, color);
+	kon_drawLine(fb, x + width, y, x + width, y + height, color);
+}
+
+void kon_fillRectangle(kon_framebuffer_t *fb, int x, int y, int width, int height, uint32_t color) {
 	if (!fb) return;
 
 	if (width < 0 || height < 0) return;
