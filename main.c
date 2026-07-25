@@ -49,6 +49,9 @@ int main(void) {
 				surface = RGFW_window_createSurface(win, (u8*)fb->data, fb->width, fb->height, RGFW_formatABGR8);
 			}
 		}
+		kon_clearFramebuffer(fb, 0);
+		kon_drawRectangle(fb, 20, 20, 50, 50, 0XFFA500FF);
+
 		RGFW_window_blitSurface(win, surface);
 	}
 
