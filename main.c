@@ -16,20 +16,35 @@
 int main(void) {
 	RGFW_init("konsofren test", 0);
 	RGFW_window *win = RGFW_createWindow(WINDOW_TITLE, 0, 0, WINDOW_W, WINDOW_H, RGFW_windowCenter | RGFW_windowTransparent);
+	if (!win) {
+		RGFW_deinit();
+		return 1;
+	}
 	RGFW_window_setExitKey(win, RGFW_keyQ);
 
 	kon_framebuffer_t *fb = kon_createFramebuffer(WINDOW_W, WINDOW_H);
+	if (!fb) {
+		RGFW_window_close(win);
+		RGFW_deinit();
+		return 1;
+	}
 
 	kon_putPixel(fb, 20, 20, 0xFFFFFFFF);
 
 	RGFW_surface *surface = RGFW_window_createSurface(win, (u8*)fb->data, fb->width, fb->height, RGFW_formatABGR8);
+	if (!surface) {
+		kon_freeFramebuffer(fb);
+		RGFW_window_close(win);
+		RGFW_deinit();
+		return 1;
+	}
 
 	RGFW_event event;
 	while (RGFW_window_shouldClose(win) == RGFW_FALSE) {
 		while (RGFW_window_checkEvent(win, &event)) {
 			if (event.type == RGFW_windowResized) {
 				kon_resizeFramebuffer(fb, event.update.w, event.update.h);
-
+				
 				RGFW_surface_free(surface);
 				surface = RGFW_window_createSurface(win, (u8*)fb->data, fb->width, fb->height, RGFW_formatABGR8);
 			}
@@ -39,6 +54,8 @@ int main(void) {
 
 	kon_freeFramebuffer(fb);
 	RGFW_window_close(win);
+
+	RGFW_deinit();
 
 	return EXIT_SUCCESS;
 }

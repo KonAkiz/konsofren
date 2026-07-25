@@ -65,7 +65,7 @@ void kon_resizeFramebuffer(kon_framebuffer_t *fb, int width, int height) {
 	uint32_t *tmp = realloc(fb->data, (size_t)width * height * sizeof(uint32_t));
 	if (!tmp) return;
 
-	db->data = tmp;
+	fb->data = tmp;
 	fb->width  = width;
 	fb->height = height;
 
