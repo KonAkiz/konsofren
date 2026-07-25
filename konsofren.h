@@ -44,6 +44,33 @@ void kon_drawCircle(kon_framebuffer_t *fb, int center_x, int center_y, int radiu
 
 #ifdef KONSOFREN_IMPLEMENTATION
 
+/*** private helper ***/
+
+static inline uint32_t kon_blendColor(uint32_t dst, uint32_t src) {
+	
+	uint8_t src_a = (src >> 0)  & 0xFF;
+	uint8_t src_b = (src >> 8)  & 0xFF;
+	uint8_t src_g = (src >> 16) & 0xFF;
+	uint8_t src_r = (src >> 24) & 0xFF;
+
+	if (src_a == 0xFF) {
+		return src;
+	}
+
+	uint8_t dst_a = (dst >> 0)  & 0xFF;
+	uint8_t dst_b = (dst >> 8)  & 0xFF;
+	uint8_t dst_g = (dst >> 16) & 0xFF;
+	uint8_t dst_r = (dst >> 24) & 0xFF;
+
+	uint8_t inv_a = 255 - src_a;
+
+	uint8_t out_r = (src_r * src_a + dst_r * inv_a) / 255;
+	uint8_t out_g = (src_g * src_a + dst_g * inv_a) / 255;
+	uint8_t out_b = (src_b * src_a + dst_b * inv_a) / 255;
+
+	return ((uint32_t)out_r << 24) | ((uint32_t)out_g << 16) | ((uint32_t)out_b << 8) | (uint32_t)dst_a;
+}
+
 /*** framebuffer implementation ***/
 
 kon_framebuffer_t *kon_createFramebuffer(int width, int height) {
