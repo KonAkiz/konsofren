@@ -4,6 +4,9 @@
 #define RGFW_IMPLEMENTATION
 #include "RGFW.h"
 
+#define STB_IMAGE_IMPLEMENTATION
+#include "stb_image.h"
+
 #define KONSOFREN_IMPLEMENTATION
 #include "konsofren.h"
 
@@ -14,6 +17,9 @@
 #define WINDOW_H 480
 
 int main(void) {
+
+	/*** window handling initialization ***/
+
 	RGFW_init("konsofren test", 0);
 	RGFW_window *win = RGFW_createWindow(WINDOW_TITLE, 0, 0, WINDOW_W, WINDOW_H, RGFW_windowCenter | RGFW_windowTransparent);
 	if (!win) {
@@ -39,6 +45,20 @@ int main(void) {
 		return 1;
 	}
 
+	/*** etc ***/
+
+	int w, h, channels;
+	unsigned char *pixels = stbi_load("test.png", &w, &h, &channels, 4);
+	if (!pixels) {
+		RGFW_surface_free(surface);
+		kon_freeFramebuffer(fb);
+		RGFW_window_close(win);
+		RGFW_deinit();
+		return 1;
+	}
+
+	/*** main loop ***/
+
 	RGFW_event event;
 	while (RGFW_window_shouldClose(win) == RGFW_FALSE) {
 		while (RGFW_window_checkEvent(win, &event)) {
@@ -62,6 +82,10 @@ int main(void) {
 		RGFW_window_blitSurface(win, surface);
 	}
 
+	/*** cleanup ***/
+
+	stbi_image_free(pixels);
+	RGFW_surface_free(surface);
 	kon_freeFramebuffer(fb);
 	RGFW_window_close(win);
 
