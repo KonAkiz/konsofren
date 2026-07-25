@@ -49,11 +49,14 @@ int main(void) {
 				surface = RGFW_window_createSurface(win, (u8*)fb->data, fb->width, fb->height, RGFW_formatABGR8);
 			}
 		}
+
+		/*** draw tests ***/
 		kon_clearFramebuffer(fb, KON_BACKGROUND_COLOR);
 		kon_drawRectangle(fb, 400, 300, 50, 50, 0xFFA500FF);
 		kon_fillRectangle(fb, 20, 20, 50, 50, 0xFFA500FF);
 		kon_drawLine(fb, 300, 100, 100, 250, 0xFFFFFFFF);
 		kon_drawCircle(fb, fb->width / 2, fb->height / 2, 90, 0xFF0000FF);
+		kon_fillRectangle(fb, 200, 200, 50, 50, 0xFF00005F);
 
 		RGFW_window_blitSurface(win, surface);
 	}
