@@ -24,12 +24,18 @@ int main(void) {
 
 	RGFW_surface *surface = RGFW_window_createSurface(win, (u8*)fb->data, fb->width, fb->height, RGFW_formatABGR8);
 
+	RGFW_event event;
 	while (RGFW_window_shouldClose(win) == RGFW_FALSE) {
-		RGFW_pollEvents();
+		while (RGFW_window_checkEvent(win, &event)) {
+			if (event.type == RGFW_windowResized) {
+				kon_resizeFramebuffer(fb, event.update.w, event.update.h);
+
+				RGFW_surface_free(surface);
+				surface = RGFW_window_createSurface(win, (u8*)fb->data, fb->width, fb->height, RGFW_formatABGR8);
+			}
+		}
 		RGFW_window_blitSurface(win, surface);
 	}
-
-	puts("Hello, World!");
 
 	kon_freeFramebuffer(fb);
 	RGFW_window_close(win);

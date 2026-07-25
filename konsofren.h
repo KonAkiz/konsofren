@@ -13,6 +13,7 @@ kon_framebuffer_t *kon_createFramebuffer(int width, int height);
 void kon_freeFramebuffer(kon_framebuffer_t *fb);
 void kon_putPixel(kon_framebuffer_t *fb, int x, int y, uint32_t color);
 void kon_clearFramebuffer(kon_framebuffer_t *fb, uint32_t color);
+void kon_resizeFramebuffer(kon_framebuffer_t *fb, int width, int height);
 
 /*** implementation ***/
 
@@ -49,6 +50,16 @@ void kon_clearFramebuffer(kon_framebuffer_t *fb, uint32_t color) {
 			fb->data[i] = color;
 		}
 	}
+}
+
+void kon_resizeFramebuffer(kon_framebuffer_t *fb, int width, int height) {
+	if (!fb) return;
+
+	fb->width  = width;
+	fb->height = height;
+
+	fb->data = realloc(fb->data, (size_t)width * height * sizeof(uint32_t));
+	kon_clearFramebuffer(fb, 0x000000FF);
 }
 
 #endif
