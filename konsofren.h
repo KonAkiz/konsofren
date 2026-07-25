@@ -65,9 +65,6 @@ void kon_putPixel(kon_framebuffer_t *fb, int x, int y, uint32_t color) {
 void kon_clearFramebuffer(kon_framebuffer_t *fb, uint32_t color) {
 	if (!fb) return;
 
-	if (color == 0)
-		color = fb->backgroundColor;
-
 	for (int i = 0; i < fb->width * fb->height; i++) {
 		/* did it directly to not check overhead because of the if in bounds check */
 		fb->data[i] = color;
