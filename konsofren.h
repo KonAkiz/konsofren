@@ -25,7 +25,7 @@ typedef kon_framebuffer_t kon_image;
 
 typedef enum kon_imageFormat {
 	konFormatRGBA8 = 0,
-	konFormatBGRA8,
+	konFormatABGR8,
 } kon_imageFormat_t;
 
 kon_image *kon_loadImage(const uint8_t *pixels, int width, int height, kon_imageFormat_t format);
@@ -229,6 +229,52 @@ void kon_drawCircle(kon_framebuffer_t *fb, int center_x, int center_y, int radiu
 			err += 2 * (y - x) + 1;
 		}
 	}
+}
+
+/*** image implementation ***/
+
+kon_image *kon_loadImage(const uint8_t *pixels, int width, int height, kon_imageFormat_t format) {
+	kon_image *image = malloc(sizeof(kon_image));
+	if (!image) return NULL;
+
+	image->data = malloc(width * height * sizeof(uint32_t));
+	if (!image->data) {
+		free(image);
+		return NULL;
+	}
+
+	image->width = width;
+	image->height = height;
+
+	for (int i = 0; i < width * height; i++) {
+		uint8_t r, g, b, a;
+
+		switch(format) {
+		case konFormatRGBA8:
+			r = pixels[i * 4 + 0];
+			g = pixels[i * 4 + 1];
+			b = pixels[i * 4 + 2];
+			a = pixels[i * 4 + 3];
+			break;
+		case konFormatABGR8:
+			a = pixels[i * 4 + 0];
+			b = pixels[i * 4 + 1];
+			g = pixels[i * 4 + 2];
+			r = pixels[i * 4 + 3];
+			break;
+		default:
+			free(image->data);
+			free(image);
+			return NULL;
+		}
+
+		image->data[i] = ((uint32_t)r << 24) | ((uint32_t)g << 16) | ((uint32_t)b << 8) | (uint32_t)a;
+	}
+
+	return image;
+}
+void kon_freeImage(kon_image *image) {
+	kon_freeFramebuffer(image);
 }
 
 #endif

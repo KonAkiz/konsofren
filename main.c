@@ -57,6 +57,16 @@ int main(void) {
 		return 1;
 	}
 
+	kon_image *image = kon_loadImage(pixels, w, h, konFormatRGBA8);
+	if (!image) {
+		stbi_image_free(pixels);
+		RGFW_surface_free(surface);
+		kon_freeFramebuffer(fb);
+		RGFW_window_close(win);
+		RGFW_deinit();
+		return 1;
+	}
+
 	/*** main loop ***/
 
 	RGFW_event event;
@@ -84,6 +94,7 @@ int main(void) {
 
 	/*** cleanup ***/
 
+	kon_freeImage(image);
 	stbi_image_free(pixels);
 	RGFW_surface_free(surface);
 	kon_freeFramebuffer(fb);
