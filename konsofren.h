@@ -100,29 +100,8 @@ void kon_putPixel(kon_framebuffer_t *fb, int x, int y, uint32_t color) {
 
 	if (x < 0 || x >= fb->width || y < 0 || y >= fb->height) return;
 
-	uint8_t src_a = (color >> 0)  & 0xFF;
-	uint8_t src_b = (color >> 8)  & 0xFF;
-	uint8_t src_g = (color >> 16) & 0xFF;
-	uint8_t src_r = (color >> 24) & 0xFF;
-
-	if (src_a == 0xFF) {
-		fb->data[y * fb->width + x] = color;
-		return;
-	}
-
 	uint32_t dst = fb->data[y * fb->width + x];
-	uint8_t dst_a = (dst >> 0)  & 0xFF;
-	uint8_t dst_b = (dst >> 8)  & 0xFF;
-	uint8_t dst_g = (dst >> 16) & 0xFF;
-	uint8_t dst_r = (dst >> 24) & 0xFF;
-
-	uint8_t inv_a = 255 - src_a;
-
-	uint8_t out_r = (src_r * src_a + dst_r * inv_a) / 255;
-	uint8_t out_g = (src_g * src_a + dst_g * inv_a) / 255;
-	uint8_t out_b = (src_b * src_a + dst_b * inv_a) / 255;
-
-	fb->data[y * fb->width + x] = ((uint32_t)out_r << 24) | ((uint32_t)out_g << 16) | ((uint32_t)out_b << 8) | (uint32_t)dst_a;
+	fb->data[y * fb->width + x] = kon_blendColor(dst, color);
 }
 
 void kon_clearFramebuffer(kon_framebuffer_t *fb, uint32_t color) {
@@ -175,28 +154,9 @@ void kon_fillRectangle(kon_framebuffer_t *fb, int x, int y, int width, int heigh
 
 	for (int offset_y = 0; offset_y < height; offset_y++) {
 		for (int offset_x = 0; offset_x < width; offset_x++) {
-			uint8_t src_a = (color >> 0)  & 0xFF;
-			uint8_t src_b = (color >> 8)  & 0xFF;
-			uint8_t src_g = (color >> 16) & 0xFF;
-			uint8_t src_r = (color >> 24) & 0xFF;
+			uint32_t dst = fb->data[(offset_y + y) * fb->width + (offset_x + x)];
+			fb->data[(y + offset_y) * fb->width + (x + offset_x)] = kon_blendColor(dst, color);
 
-			if (src_a == 0xFF) {
-				fb->data[(y + offset_y) * fb->width + (x + offset_x)] = color;
-			} else {
-				uint32_t dst = fb->data[(offset_y + y) * fb->width + (offset_x + x)];
-				uint8_t dst_a = (dst >> 0)  & 0xFF;
-				uint8_t dst_b = (dst >> 8)  & 0xFF;
-				uint8_t dst_g = (dst >> 16) & 0xFF;
-				uint8_t dst_r = (dst >> 24) & 0xFF;
-
-				uint8_t inv_a = 255 - src_a;
-
-				uint8_t out_r = (src_r * src_a + dst_r * inv_a) / 255;
-				uint8_t out_g = (src_g * src_a + dst_g * inv_a) / 255;
-				uint8_t out_b = (src_b * src_a + dst_b * inv_a) / 255;
-
-				fb->data[(y + offset_y) * fb->width + (x + offset_x)] = ((uint32_t)out_r << 24) | ((uint32_t)out_g << 16) | ((uint32_t)out_b << 8) | (uint32_t)dst_a;
-			}
 		}
 	}
 }
