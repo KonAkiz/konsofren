@@ -16,6 +16,7 @@ typedef kon_framebuffer_t kon_image;
 typedef enum kon_imageFormat {
 	konFormatRGBA8 = 0,
 	konFormatABGR8,
+	konFormatARGB8
 } kon_imageFormat_t;
 
 /*** framebuffer declarations ***/
@@ -151,6 +152,12 @@ void kon_exportPixels(kon_framebuffer_t *fb, kon_imageFormat_t format, uint8_t *
 			out[i * 4 + 1] = b;
 			out[i * 4 + 2] = g;
 			out[i * 4 + 3] = r;
+			break;
+		case konFormatARGB8:
+			out[i * 4 + 0] = a;
+			out[i * 4 + 1] = r;
+			out[i * 4 + 2] = g;
+			out[i * 4 + 3] = b;
 			break;
 		default:
 			return;
@@ -309,6 +316,12 @@ kon_image *kon_loadImage(const uint8_t *pixels, int width, int height, kon_image
 			b = pixels[i * 4 + 1];
 			g = pixels[i * 4 + 2];
 			r = pixels[i * 4 + 3];
+			break;
+		case konFormatARGB8:
+			a = pixels[i * 4 + 0];
+			r = pixels[i * 4 + 1];
+			g = pixels[i * 4 + 2];
+			b = pixels[i * 4 + 3];
 			break;
 		default:
 			free(image->data);
