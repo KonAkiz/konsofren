@@ -6,20 +6,10 @@
 
 #define KON_BACKGROUND_COLOR 0x05050AFF
 
-/*** framebuffer declarations ***/
-
 typedef struct kon_framebuffer {
 	int width, height;
 	uint32_t *data;
 } kon_framebuffer_t;
-
-kon_framebuffer_t *kon_createFramebuffer(int width, int height);
-void kon_freeFramebuffer(kon_framebuffer_t *fb);
-void kon_putPixel(kon_framebuffer_t *fb, int x, int y, uint32_t color);
-void kon_clearFramebuffer(kon_framebuffer_t *fb, uint32_t color);
-void kon_resizeFramebuffer(kon_framebuffer_t *fb, int width, int height);
-
-/*** image declarations ***/
 
 typedef kon_framebuffer_t kon_image;
 
@@ -27,6 +17,17 @@ typedef enum kon_imageFormat {
 	konFormatRGBA8 = 0,
 	konFormatABGR8,
 } kon_imageFormat_t;
+
+/*** framebuffer declarations ***/
+
+kon_framebuffer_t *kon_createFramebuffer(int width, int height);
+void kon_freeFramebuffer(kon_framebuffer_t *fb);
+void kon_putPixel(kon_framebuffer_t *fb, int x, int y, uint32_t color);
+void kon_clearFramebuffer(kon_framebuffer_t *fb, uint32_t color);
+void kon_resizeFramebuffer(kon_framebuffer_t *fb, int width, int height);
+void kon_exportPixels(kon_framebuffer_t *fb, kon_imageFormat_t format, uint8_t *out);
+
+/*** image declarations ***/
 
 kon_image *kon_loadImage(const uint8_t *pixels, int width, int height, kon_imageFormat_t format);
 void kon_freeImage(kon_image *image);
@@ -123,6 +124,38 @@ void kon_resizeFramebuffer(kon_framebuffer_t *fb, int width, int height) {
 	fb->data = tmp;
 	fb->width  = width;
 	fb->height = height;
+}
+
+void kon_exportPixels(kon_framebuffer_t *fb, kon_imageFormat_t format, uint8_t *out) {
+	if (!fb || !out) return;
+
+	int fbSize = fb->width * fb->height;
+
+	for (int i = 0; i < fbSize; i++) {
+		uint32_t color = fb->data[i];
+
+		uint8_t a = (color >> 0)  & 0xFF;
+		uint8_t b = (color >> 8)  & 0xFF;
+		uint8_t g = (color >> 16) & 0xFF;
+		uint8_t r = (color >> 24) & 0xFF;
+
+		switch (format) {
+		case konFormatRGBA8:
+			out[i * 4 + 0] = r;
+			out[i * 4 + 1] = g;
+			out[i * 4 + 2] = b;
+			out[i * 4 + 3] = a;
+			break;
+		case konFormatABGR8:
+			out[i * 4 + 0] = a;
+			out[i * 4 + 1] = b;
+			out[i * 4 + 2] = g;
+			out[i * 4 + 3] = r;
+			break;
+		default:
+			return;
+		}
+	}
 }
 
 /*** draw functions implementation ***/
