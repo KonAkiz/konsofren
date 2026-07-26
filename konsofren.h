@@ -39,6 +39,7 @@ void kon_drawRectangle(kon_framebuffer_t *fb, int x, int y, int width, int heigh
 void kon_fillRectangle(kon_framebuffer_t *fb, int x, int y, int width, int height, uint32_t color);
 void kon_drawLine(kon_framebuffer_t *fb, int x0, int y0, int x1, int y1, uint32_t color);
 void kon_drawCircle(kon_framebuffer_t *fb, int center_x, int center_y, int radius, uint32_t color);
+void kon_fillCircle(kon_framebuffer_t *fb, int center_x, int center_y, int radius, uint32_t color);
 
 /*** implementation ***/
 
@@ -208,6 +209,31 @@ void kon_drawCircle(kon_framebuffer_t *fb, int center_x, int center_y, int radiu
 		kon_putPixel(fb, center_x - y, center_y - x, color);
 		kon_putPixel(fb, center_x + y, center_y - x, color);
 		kon_putPixel(fb, center_x + x, center_y - y, color);
+
+		y += 1;
+
+		if (err < 0) {
+			err += 2 * y + 1;
+		} else {
+			x -= 1;
+			err += 2 * (y - x) + 1;
+		}
+	}
+}
+
+void kon_fillCircle(kon_framebuffer_t *fb, int center_x, int center_y, int radius, uint32_t color) {
+	if (!fb) return;
+	if (radius <= 0) return;
+
+	int x = radius;
+	int y = 0;
+	int err = 1 - radius;
+
+	while (x >= y) {
+		kon_drawLine(fb, center_x - x, center_y + y, center_x + x, center_y + y, color);
+		kon_drawLine(fb, center_x - x, center_y - y, center_x + x, center_y - y, color);
+		kon_drawLine(fb, center_x - y, center_y + x, center_x + y, center_y + x, color);
+		kon_drawLine(fb, center_x - y, center_y - x, center_x + y, center_y - x, color);
 
 		y += 1;
 

@@ -86,6 +86,7 @@ int main(void) {
 		/*** draw tests ***/
 		kon_clearFramebuffer(fb, KON_BACKGROUND_COLOR);
 
+		kon_fillCircle(fb, 400, 400, 50, 0xFF0000FF); /* color red */
 		kon_drawImage(fb, 50, 50, 300, 200, image);
 
 		/* kon_drawRectangle(fb, 400, 300, 50, 50, 0xFFA500FF); */
