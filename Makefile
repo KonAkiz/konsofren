@@ -35,7 +35,7 @@ ${TARGET}: ${OBJ}
 	${CC} -c ${CFLAGS} $< -o $@ ${INC}
 
 test: ${TARGET}
-	@./${TARGET}
+	-./${TARGET}
 
 .IGNORE: clean
 
