@@ -30,7 +30,7 @@ If you need some examples of how to use it or implement it, check out the [examp
 
 One example I made during development was the file [main.c](examples/main.c) in the examples directory/folder.
 
-You can compile the example by using my [Makefile](Makefile) using stuff like GNU make on linux and some BSDs yourself:
+You can compile the example by using my [Makefile](Makefile) using stuff like GNU make on linux and make on some BSDs yourself:
 ```sh
 make
 ```
