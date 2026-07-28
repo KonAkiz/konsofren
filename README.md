@@ -1,5 +1,5 @@
 # KONSOFREN
-## KonAki's Software Renderer
+## KonAki's Basic Software Renderer (Rasterizer)
 
 ![License](https://img.shields.io/badge/license-MIT-blue)
 ![Language](https://img.shields.io/badge/language-C99-orange)
