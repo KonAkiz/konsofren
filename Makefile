@@ -1,10 +1,10 @@
-CC=c99
+.POSIX:
 
-SRC=examples/main.c
+#
+# COMPILER OPTIONS
+#
 
-OBJ=$(SRC:.c=.o)
-
-TARGET=program
+CC=cc
 
 CFLAGS=-Wall -Wextra -Werror -pedantic -std=c99
 
@@ -12,16 +12,32 @@ INC=-I.
 
 LIBS=-L. -lm -lX11 -lXrandr
 
-.PHONY: test
+# SRCS
+
+SRC=examples/main.c
+
+# OBJS
+
+OBJ=examples/main.o
+
+# TARGETS
+
+TARGET=program
+
+.PHONY: test clean
 
 ${TARGET}: ${OBJ}
 	${CC} ${OBJ} -o ${TARGET} ${CFLAGS} ${INC} ${LIBS}
 
-%.o: %.c
+.SUFFIXES: .c .o
+
+.c.o:
 	${CC} -c ${CFLAGS} $< -o $@ ${INC}
 
 test: ${TARGET}
 	@./${TARGET}
+
+.IGNORE: clean
 
 clean:
 	rm -vf ${TARGET} ${OBJ}
