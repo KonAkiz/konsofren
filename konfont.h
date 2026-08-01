@@ -127,7 +127,7 @@ kon_image *kon_fontGetAtlas(kon_font_t *font) {
 		rgba[i * 4 + 0] = 255;
 		rgba[i * 4 + 1] = 255;
 		rgba[i * 4 + 2] = 255;
-		rgba[i * 4 + 3] = 0;
+		rgba[i * 4 + 3] = a;
 	}
 
 	kon_image *img = kon_loadImage(rgba, font->atlasSize, font->atlasSize, konFormatRGBA8);
