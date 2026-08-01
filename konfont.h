@@ -135,6 +135,40 @@ kon_image *kon_fontGetAtlas(kon_font_t *font) {
 	return img;
 }
 
+/*** text draw implementation ***/
+
+void kon_drawText(kon_framebuffer_t *fb, kon_font_t *font, int x, int y, const char *text, uint32_t color) {
+	if (!fb || !font || !text) return;
+
+	uint32_t baseColor = color & 0xFFFFFF00;
+
+	float cursorX = (float)x;
+	float cursorY = (float)y;
+
+	for (const char *p = text; *p; p++) {
+		unsigned char c = (unsigned char)*p;
+
+		if (c < KON_FONT_FIRST_CHAR || c >= KON_FONT_FIRST_CHAR + KON_FONT_NUM_CHARS) continue;
+
+		stbtt_aligned_quad q;
+		stbtt_GetBakedQuad(font->chardata, font->atlasSize, font->atlasSize, c - KON_FONT_FIRST_CHAR, &cursorX, &cursorY, &q, 1);
+
+		int src_x0 = (int)(q.s0 * font->atlasSize);
+		int src_y0 = (int)(q.t0 * font->atlasSize);
+		int glyphW = (int)(q.x1 - q.x0);
+		int glyphH = (int)(q.y1 - q.y0);
+
+		for (int gy = 0; gy < glyphH; gy++) {
+			for (int gx = 0; gx < glyphW; gx++) {
+				uint8_t alpha = font->atlasPixels[(src_y0 + gy) * font->atlasSize + (src_x0 + gx)];
+				if (alpha == 0) continue;
+
+				kon_putPixel(fb, (int)q.x0 + gx, (int)q.y0 + gy, baseColor | alpha);
+			}
+		}
+	}
+}
+
 #endif /* KONFONT_IMPLEMENTATION */
 
 #endif /* KONFONT_H */
