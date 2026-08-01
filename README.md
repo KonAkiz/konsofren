@@ -50,9 +50,9 @@ Here is a small example of a minimum setup if you don't want to read it in the c
 #define KONSOFREN_IMPLEMENTATION
 #include "konsofren.h"
 
-/* r g b a color */
-#define CLEAR_COLOR  0x000000FF // color black
-#define SQUARE_COLOR 0xFFA500FF // color orange
+/* a r g b color */
+#define CLEAR_COLOR  0xFF000000 // color black
+#define SQUARE_COLOR 0xFFFFA500 // color orange
 
 int main(void) {
 	int width = 640;
