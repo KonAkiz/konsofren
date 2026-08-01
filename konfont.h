@@ -141,7 +141,7 @@ kon_image *kon_fontGetAtlas(kon_font_t *font) {
 void kon_drawText(kon_framebuffer_t *fb, kon_font_t *font, int x, int y, const char *text, uint32_t color) {
 	if (!fb || !font || !text) return;
 
-	uint32_t baseColor = color & 0xFFFFFF00;
+	uint32_t baseColor = color & 0x00FFFFFF;
 
 	float cursorX = (float)x;
 	float cursorY = (float)y;
@@ -164,7 +164,7 @@ void kon_drawText(kon_framebuffer_t *fb, kon_font_t *font, int x, int y, const c
 				uint8_t alpha = font->atlasPixels[(src_y0 + gy) * font->atlasSize + (src_x0 + gx)];
 				if (alpha == 0) continue;
 
-				kon_putPixel(fb, (int)q.x0 + gx, (int)q.y0 + gy, baseColor | alpha);
+				kon_putPixel(fb, (int)q.x0 + gx, (int)q.y0 + gy, ((uint32_t)alpha << 24) | baseColor);
 			}
 		}
 	}
