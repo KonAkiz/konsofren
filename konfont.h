@@ -169,6 +169,28 @@ void kon_drawText(kon_framebuffer_t *fb, kon_font_t *font, int x, int y, const c
 	}
 }
 
+void kon_measuretext(kon_font_t *font, const char *text, int *outWidth, int *outHeight) {
+	if (!font || !text) return;
+
+	float cursorX = 0.0f;
+	float cursorY = 0.0f;
+	float maxX = 0.0f;
+
+	for (const char *p = text; *p; p++) {
+		unsigned char c = (unsigned char)*p;
+
+		if (c < KON_FONT_FIRST_CHAR || c >= KON_FONT_FIRST_CHAR + KON_FONT_NUM_CHARS) continue;
+
+		stbtt_aligned_quad q;
+		stbtt_GetBakedQuad(font->chardata, font->atlasSize, font->atlasSize, c - KON_FONT_FIRST_CHAR, &cursorX, &cursorY, &d, 1);
+
+		if (cursorX > maxX) maxX = cursorX;
+	}
+
+	if (outWidth) *outWidth = (int)maxX;
+	if (outHeight) *outHeight = (int)font->pixelHeight;
+}
+
 #endif /* KONFONT_IMPLEMENTATION */
 
 #endif /* KONFONT_H */
