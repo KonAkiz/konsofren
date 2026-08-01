@@ -59,7 +59,7 @@ struct kon_font {
 	stbtt_bakedchar chardata[KON_FONT_NUM_CHARS];
 	uint8_t *atlasPixels;
 	int atlasSize;
-	float pixelHeight
+	float pixelHeight;
 };
 
 /*** private helpers ***/
