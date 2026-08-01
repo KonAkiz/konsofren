@@ -108,6 +108,13 @@ kon_font_t *kon_loadFont(const uint8_t *ttf_data, size_t size, float pixelHeight
 	return font;
 }
 
+void kon_freeFont(kon_font_t *font) {
+	if (!font) return;
+
+	free(font->atlasPixels);
+	free(font);
+}
+
 #endif /* KONFONT_IMPLEMENTATION */
 
 #endif /* KONFONT_H */
