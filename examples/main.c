@@ -37,7 +37,7 @@ int main(void) {
 
 	kon_putPixel(fb, 20, 20, 0xFFFFFFFF);
 
-	RGFW_surface *surface = RGFW_window_createSurface(win, (u8*)fb->data, fb->width, fb->height, RGFW_formatABGR8);
+	RGFW_surface *surface = RGFW_window_createSurface(win, (u8*)fb->data, fb->width, fb->height, RGFW_formatBGRA8);
 	if (!surface) {
 		kon_freeFramebuffer(fb);
 		RGFW_window_close(win);
@@ -79,14 +79,14 @@ int main(void) {
 				kon_resizeFramebuffer(fb, event.update.w, event.update.h);
 				
 				RGFW_surface_free(surface);
-				surface = RGFW_window_createSurface(win, (u8*)fb->data, fb->width, fb->height, RGFW_formatABGR8);
+				surface = RGFW_window_createSurface(win, (u8*)fb->data, fb->width, fb->height, RGFW_formatBGRA8);
 			}
 		}
 
 		/*** draw tests ***/
-		kon_clearFramebuffer(fb, KON_BACKGROUND_COLOR);
+		kon_clearFramebuffer(fb, 0xFF000000);
 
-		kon_fillCircle(fb, 400, 400, 50, 0xFF0000FF); /* color red */
+		kon_fillCircle(fb, 400, 400, 50, 0xFFFF0000); /* color red */
 		kon_drawImage(fb, 50, 50, 300, 200, image);
 
 		/* kon_drawRectangle(fb, 400, 300, 50, 50, 0xFFA500FF); */
