@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: MIT */
 /*
- * konsofren.h
+ * konfont.h
  *
  * Copyright (c) 2026 KonAki
  *
