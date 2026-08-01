@@ -39,7 +39,7 @@ typedef struct kon_font kon_font_t;
 
 /*** font declarations ***/
 
-kon_font_t *kon_loadFont(const uint8_t **ttf_data, size_t size, float pixel_height);
+kon_font_t *kon_loadFont(const uint8_t **ttf_data, size_t size, float pixelHeight);
 void kon_freeFont(kon_font_t *font);
 
 kon_image *kon_fontGetAtlas(kon_font_t *font);
@@ -47,6 +47,23 @@ kon_image *kon_fontGetAtlas(kon_font_t *font);
 /*** text draw declarations ***/
 
 void kon_drawImage(kon_framebuffer_t *fb, kon_font_t *font, int x, int y, const char *text, uint32_t color);
-void kon_measureText(kon_font_t *font, const char *text, int *out_width, int *out_height);
+void kon_measureText(kon_font_t *font, const char *text, int *outWidth, int *outHeight);
 
-#endif
+/*** implementatoin ***/
+
+#ifdef KONFONT_IMPLEMENTATION
+
+#include <stb_truetype.h>
+
+struct kon_font {
+	stbtt_bakedchar chardata[KON_FONT_NUM_CHARS];
+	uint8_t *atlasPixels;
+	int atlasSize;
+	float pixelHeight
+};
+
+/*** private helpers ***/
+
+#endif /* KONFONT_IMPLEMENTATION */
+
+#endif /* KONFONT_H */
