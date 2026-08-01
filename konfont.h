@@ -70,7 +70,7 @@ static bool kon_fontBakeAtlas(kon_font_t *font, const uint8_t *ttf_data, float p
 	for (int i = 0; i < 4; i++) {
 		int atlasSize = sizes[i];
 
-		uint8_t *bitmap = malloc((size_t)atlas_size * (size_t)atlas_size);
+		uint8_t *bitmap = malloc((size_t)atlasSize * (size_t)atlasSize);
 		if (!bitmap) return false;
 
 		int result = stbtt_BakeFontBitmap(ttf_data, 0, pixelHeight, bitmap, atlasSize, atlasSize, KON_FONT_FIRST_CHAR, KON_FONT_NUM_CHARS, font->chardata);
@@ -169,7 +169,7 @@ void kon_drawText(kon_framebuffer_t *fb, kon_font_t *font, int x, int y, const c
 	}
 }
 
-void kon_measuretext(kon_font_t *font, const char *text, int *outWidth, int *outHeight) {
+void kon_measureText(kon_font_t *font, const char *text, int *outWidth, int *outHeight) {
 	if (!font || !text) return;
 
 	float cursorX = 0.0f;
@@ -182,7 +182,7 @@ void kon_measuretext(kon_font_t *font, const char *text, int *outWidth, int *out
 		if (c < KON_FONT_FIRST_CHAR || c >= KON_FONT_FIRST_CHAR + KON_FONT_NUM_CHARS) continue;
 
 		stbtt_aligned_quad q;
-		stbtt_GetBakedQuad(font->chardata, font->atlasSize, font->atlasSize, c - KON_FONT_FIRST_CHAR, &cursorX, &cursorY, &d, 1);
+		stbtt_GetBakedQuad(font->chardata, font->atlasSize, font->atlasSize, c - KON_FONT_FIRST_CHAR, &cursorX, &cursorY, &q, 1);
 
 		if (cursorX > maxX) maxX = cursorX;
 	}
