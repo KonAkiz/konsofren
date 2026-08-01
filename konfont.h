@@ -64,6 +64,29 @@ struct kon_font {
 
 /*** private helpers ***/
 
+static bool kon_fontBakeAtlas(kon_font_t *font, const uint8_t *ttf_data, float pixelHeight) {
+	int sizes[] = {256, 512, 1024, 2048};
+	
+	for (int i = 0; i < 4; i++) {
+		int atlasSize = sizes[i];
+
+		uint8_t *bitmap = malloc((size_t)atlas_size * (size_t)atlas_size);
+		if (!bitmap) return false;
+
+		int result = stbtt_BakeFontBitmap(ttf_data, 0, pixelHeight, bitmap, atlasSize, atlasSize, KON_FONT_FIRST_CHAR, KON_FONT_NUM_CHARS, font->chardata);
+
+		if (result > 0) {
+			font->atlasPixels = bitmap;
+			font->atlasSize = atlasSize;
+			return true;
+		}
+
+		free(bitmap);
+	}
+
+	return false;
+}
+
 #endif /* KONFONT_IMPLEMENTATION */
 
 #endif /* KONFONT_H */
