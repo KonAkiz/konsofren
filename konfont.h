@@ -54,7 +54,7 @@ void kon_measureText(kon_font_t *font, const char *text, int *outWidth, int *out
 
 #ifdef KONFONT_IMPLEMENTATION
 
-#include <stb_truetype.h>
+#include "stb_truetype.h"
 
 struct kon_font {
 	stbtt_bakedchar chardata[KON_FONT_NUM_CHARS];
