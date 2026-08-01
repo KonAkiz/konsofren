@@ -152,7 +152,7 @@ void kon_drawText(kon_framebuffer_t *fb, kon_font_t *font, int x, int y, const c
 		if (c < KON_FONT_FIRST_CHAR || c >= KON_FONT_FIRST_CHAR + KON_FONT_NUM_CHARS) continue;
 
 		stbtt_aligned_quad q;
-		stbtt_GetBakedQuad(font->chardata, font->atlasSize, font->atlasSize, c - KON_FONT_FIRST_CHAR, &cursorX, &cursorY, &q, 1);
+		stbtt_GetBakedQuad(font->chardata, font->atlasSize, font->atlasSize, c - KON_FONT_FIRST_CHAR, &cursorX, &cursorY, &q, 0);
 
 		int src_x0 = (int)(q.s0 * font->atlasSize);
 		int src_y0 = (int)(q.t0 * font->atlasSize);
@@ -183,7 +183,7 @@ void kon_measureText(kon_font_t *font, const char *text, int *outWidth, int *out
 		if (c < KON_FONT_FIRST_CHAR || c >= KON_FONT_FIRST_CHAR + KON_FONT_NUM_CHARS) continue;
 
 		stbtt_aligned_quad q;
-		stbtt_GetBakedQuad(font->chardata, font->atlasSize, font->atlasSize, c - KON_FONT_FIRST_CHAR, &cursorX, &cursorY, &q, 1);
+		stbtt_GetBakedQuad(font->chardata, font->atlasSize, font->atlasSize, c - KON_FONT_FIRST_CHAR, &cursorX, &cursorY, &q, 0);
 
 		if (cursorX > maxX) maxX = cursorX;
 	}
