@@ -115,6 +115,26 @@ void kon_freeFont(kon_font_t *font) {
 	free(font);
 }
 
+kon_image *kon_fontGetAtlas(kon_font_t *font) {
+	if (!font) return NULL;
+
+	int n = font->atlasSize * font->atlasSize;
+	uint8_t *rgba = malloc((size_t)n * 4);
+	if (!rgba) return NULL;
+
+	for (int i = 0; i < n; i++) {
+		uint8_t a = font->atlasPixels[i];
+		rgba[i * 4 + 0] = 255;
+		rgba[i * 4 + 1] = 255;
+		rgba[i * 4 + 2] = 255;
+		rgba[i * 4 + 3] = 0;
+	}
+
+	kon_image *img = kon_loadImage(rgba, font->atlasSize, font->atlasSize, konFormatRGBA8);
+	free(rgba);
+	return img;
+}
+
 #endif /* KONFONT_IMPLEMENTATION */
 
 #endif /* KONFONT_H */
