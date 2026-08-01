@@ -37,4 +37,16 @@
 
 typedef struct kon_font kon_font_t;
 
+/*** font declarations ***/
+
+kon_font_t *kon_loadFont(const uint8_t **ttf_data, size_t size, float pixel_height);
+void kon_freeFont(kon_font_t *font);
+
+kon_image *kon_fontGetAtlas(kon_font_t *font);
+
+/*** text draw declarations ***/
+
+void kon_drawImage(kon_framebuffer_t *fb, kon_font_t *font, int x, int y, const char *text, uint32_t color);
+void kon_measureText(kon_font_t *font, const char *text, int *out_width, int *out_height);
+
 #endif
