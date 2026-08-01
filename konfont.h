@@ -46,7 +46,7 @@ kon_image *kon_fontGetAtlas(kon_font_t *font);
 
 /*** text draw declarations ***/
 
-void kon_drawImage(kon_framebuffer_t *fb, kon_font_t *font, int x, int y, const char *text, uint32_t color);
+void kon_drawText(kon_framebuffer_t *fb, kon_font_t *font, int x, int y, const char *text, uint32_t color);
 void kon_measureText(kon_font_t *font, const char *text, int *outWidth, int *outHeight);
 
 /*** implementatoin ***/
