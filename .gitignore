@@ -1,5 +1,7 @@
 program
 program.exe
+*.exe
+font-test
 [Bb]uild
 [Oo]ut
 *.o
