@@ -29,7 +29,7 @@
 #include <stdint.h>
 #include <stdlib.h>
 
-#define KON_BACKGROUND_COLOR 0x05050AFF
+#define KON_BACKGROUND_COLOR 0xFF05050A
 
 typedef struct kon_framebuffer {
 	int width, height;
@@ -77,19 +77,19 @@ void kon_fillCircle(kon_framebuffer_t *fb, int center_x, int center_y, int radiu
 
 static inline uint32_t kon_blendColor(uint32_t dst, uint32_t src) {
 	
-	uint8_t src_a = (src >> 0)  & 0xFF;
-	uint8_t src_b = (src >> 8)  & 0xFF;
-	uint8_t src_g = (src >> 16) & 0xFF;
-	uint8_t src_r = (src >> 24) & 0xFF;
+	uint8_t src_a = (src >> 24) & 0xFF;
+	uint8_t src_r = (src >> 16) & 0xFF;
+	uint8_t src_g = (src >> 8)  & 0xFF;
+	uint8_t src_b = (src >> 0)  & 0xFF;
 
 	if (src_a == 0xFF) {
 		return src;
 	}
 
-	uint8_t dst_a = (dst >> 0)  & 0xFF;
-	uint8_t dst_b = (dst >> 8)  & 0xFF;
-	uint8_t dst_g = (dst >> 16) & 0xFF;
-	uint8_t dst_r = (dst >> 24) & 0xFF;
+	uint8_t dst_a = (dst >> 24) & 0xFF;
+	uint8_t dst_r = (dst >> 16) & 0xFF;
+	uint8_t dst_g = (dst >> 8)  & 0xFF;
+	uint8_t dst_b = (dst >> 0)  & 0xFF;
 
 	uint8_t inv_a = 255 - src_a;
 
@@ -97,7 +97,7 @@ static inline uint32_t kon_blendColor(uint32_t dst, uint32_t src) {
 	uint8_t out_g = (src_g * src_a + dst_g * inv_a) / 255;
 	uint8_t out_b = (src_b * src_a + dst_b * inv_a) / 255;
 
-	return ((uint32_t)out_r << 24) | ((uint32_t)out_g << 16) | ((uint32_t)out_b << 8) | (uint32_t)dst_a;
+	return ((uint32_t)dst_a << 24) | ((uint32_t)out_r << 16) | ((uint32_t)out_g << 8) | (uint32_t)out_b;
 }
 
 /*** framebuffer implementation ***/
@@ -161,10 +161,10 @@ void kon_exportPixels(kon_framebuffer_t *fb, kon_imageFormat_t format, uint8_t *
 	for (int i = 0; i < fbSize; i++) {
 		uint32_t color = fb->data[i];
 
-		uint8_t a = (color >> 0)  & 0xFF;
-		uint8_t b = (color >> 8)  & 0xFF;
-		uint8_t g = (color >> 16) & 0xFF;
-		uint8_t r = (color >> 24) & 0xFF;
+		uint8_t a = (color >> 24) & 0xFF;
+		uint8_t r = (color >> 16) & 0xFF;
+		uint8_t g = (color >> 8)  & 0xFF;
+		uint8_t b = (color >> 0)  & 0xFF;
 
 		switch (format) {
 		case konFormatRGBA8:
@@ -367,7 +367,7 @@ kon_image *kon_loadImage(const uint8_t *pixels, int width, int height, kon_image
 			return NULL;
 		}
 
-		image->data[i] = ((uint32_t)r << 24) | ((uint32_t)g << 16) | ((uint32_t)b << 8) | (uint32_t)a;
+		image->data[i] = ((uint32_t)a << 24) | ((uint32_t)r << 16) | ((uint32_t)g << 8) | (uint32_t)b;
 	}
 
 	return image;
