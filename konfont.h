@@ -87,6 +87,27 @@ static bool kon_fontBakeAtlas(kon_font_t *font, const uint8_t *ttf_data, float p
 	return false;
 }
 
+/*** font implementation ***/
+
+kon_font_t *kon_loadFont(const uint8_t *ttf_data, size_t size, float pixelHeight) {
+	(void)size;
+
+	if (!ttf_data || pixelHeight <= 0.0f) return NULL;
+
+	kon_font_t *font = malloc(sizeof(kon_font_t));
+	if (!font) return NULL;
+
+	font->atlasPixels = NULL;
+	font->pixelHeight = pixelHeight;
+
+	if (!kon_fontBakeAtlas(font, ttf_data, pixelHeight)) {
+		free(font);
+		return NULL;
+	}
+
+	return font;
+}
+
 #endif /* KONFONT_IMPLEMENTATION */
 
 #endif /* KONFONT_H */
