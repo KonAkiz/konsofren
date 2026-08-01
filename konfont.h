@@ -39,7 +39,7 @@ typedef struct kon_font kon_font_t;
 
 /*** font declarations ***/
 
-kon_font_t *kon_loadFont(const uint8_t **ttf_data, size_t size, float pixelHeight);
+kon_font_t *kon_loadFont(const uint8_t *ttf_data, size_t size, float pixelHeight);
 void kon_freeFont(kon_font_t *font);
 
 kon_image *kon_fontGetAtlas(kon_font_t *font);
