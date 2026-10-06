@@ -326,7 +326,7 @@ kon_image *kon_loadImage(const uint8_t *pixels, int width, int height, kon_image
 	kon_image *image = malloc(sizeof(kon_image));
 	if (!image) return NULL;
 
-	image->data = malloc(width * height * sizeof(uint32_t));
+	image->data = malloc((size_t)width * height * sizeof(uint32_t));
 	if (!image->data) {
 		free(image);
 		return NULL;
@@ -384,7 +384,7 @@ void kon_drawImage(kon_framebuffer_t *fb, int x, int y, int width, int height, k
 	/* just trying to not draw when it's unnecessary */
 	if (image->width <= 0 || image->height <= 0) return;
 	if (width <= 0 || height <= 0) return;
-	if (x > fb->width || y > fb->height) return;
+	if (x >= fb->width || y >= fb->height) return;
 
 	/* using this loop to make sure we only the parts of the image that are on screen */
 	for (int iy = 0; iy < height; iy++) {
