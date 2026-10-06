@@ -106,7 +106,7 @@ kon_framebuffer_t *kon_createFramebuffer(int width, int height) {
 	kon_framebuffer_t *fb = malloc(sizeof(kon_framebuffer_t));
 	if (!fb) return NULL;
 
-	fb->data = malloc(width * height * sizeof(uint32_t));
+	fb->data = calloc((size_t)width * height, sizeof(uint32_t));
 	if (!fb->data) {
 		free(fb);
 		return NULL;
@@ -151,6 +151,8 @@ void kon_resizeFramebuffer(kon_framebuffer_t *fb, int width, int height) {
 	fb->data = tmp;
 	fb->width  = width;
 	fb->height = height;
+
+	kon_clearFramebuffer(fb, KON_BACKGROUND_COLOR);
 }
 
 void kon_exportPixels(kon_framebuffer_t *fb, kon_imageFormat_t format, uint8_t *out) {
