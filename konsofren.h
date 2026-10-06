@@ -100,6 +100,54 @@ static inline uint32_t kon_blendColor(uint32_t dst, uint32_t src) {
 	return ((uint32_t)dst_a << 24) | ((uint32_t)out_r << 16) | ((uint32_t)out_g << 8) | (uint32_t)out_b;
 }
 
+/* Cohen-Sutherland: clips the line to the framebuffer, returns 0 if nothing is visible */
+static int kon_outCode_(double x, double y, int width, int height) {
+	int code = 0;
+	if (x < 0) code |= 1; else if (x > width - 1) code |= 2;
+	if (y < 0) code |= 4; else if (y > height - 1) code |= 8;
+	return code;
+}
+
+static int kon_clipLine_(int width, int height, int *x0, int *y0, int *x1, int *y1) {
+	double ax = *x0, ay = *y0, bx = *x1, by = *y1;
+	double maxX = width - 1, maxY = height - 1;
+	int ca = kon_outCode_(ax, ay, width, height);
+	int cb = kon_outCode_(bx, by, width, height);
+
+	while (ca | cb) {
+		if (ca & cb) return 0;
+
+		int out = ca ? ca : cb;
+		double x, y;
+
+		if (out & 8) {
+			x = ax + (bx - ax) * (maxY - ay) / (by - ay);
+			y = maxY;
+		} else if (out & 4) {
+			x = ax + (bx - ax) * (0 - ay) / (by - ay);
+			y = 0;
+		} else if (out & 2) {
+			y = ay + (by - ay) * (maxX - ax) / (bx - ax);
+			x = maxX;
+		} else {
+			y = ay + (by - ay) * (0 - ax) / (bx - ax);
+			x = 0;
+		}
+
+		if (out == ca) {
+			ax = x; ay = y;
+			ca = kon_outCode_(ax, ay, width, height);
+		} else {
+			bx = x; by = y;
+			cb = kon_outCode_(bx, by, width, height);
+		}
+	}
+
+	*x0 = (int)(ax + 0.5); *y0 = (int)(ay + 0.5);
+	*x1 = (int)(bx + 0.5); *y1 = (int)(by + 0.5);
+	return 1;
+}
+
 /*** framebuffer implementation ***/
 
 kon_framebuffer_t *kon_createFramebuffer(int width, int height) {
@@ -238,6 +286,8 @@ void kon_fillRectangle(kon_framebuffer_t *fb, int x, int y, int width, int heigh
 
 void kon_drawLine(kon_framebuffer_t *fb, int x0, int y0, int x1, int y1, uint32_t color) {
 	if (!fb) return;
+
+	if (!kon_clipLine_(fb->width, fb->height, &x0, &y0, &x1, &y1)) return;
 
 	int dx = abs(x1 - x0);
 	int dy = abs(y1 - y0);
