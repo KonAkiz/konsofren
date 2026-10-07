@@ -28,6 +28,7 @@
 
 #include <stdint.h>
 #include <stdlib.h>
+#include <math.h>
 
 #define KON_BACKGROUND_COLOR 0xFF05050A
 
@@ -44,6 +45,65 @@ typedef enum kon_imageFormat {
 	konFormatARGB8,
 	konFormatBGRA8
 } kon_imageFormat_t;
+
+#define KON_PI 3.14159265358979323846f
+#define KON_TAU (2.0f * KON_PI)
+
+#define KON_DEG2RAD(d) ((float)(d) * (KON_PI / 180.0f))
+#define KON_RAD2DEG(r) ((float)(r) * (180.0f / KON_PI))
+
+/* kon_vec3_t built from degrees, handy for rotations: KON_DEG3(0, 45, 0) */
+#define KON_DEG3(x, y, z) ((kon_vec3_t){KON_DEG2RAD(x), KON_DEG2RAD(y), KON_DEG2RAD(z)})
+
+#define KON_VEC2(x, y) ((kon_vec2_t){(float)(x), (float)(y)})
+#define KON_VEC3(x, y, z) ((kon_vec3_t){(float)(x), (float)(y), (float)(z)})
+#define KON_VEC4(x, y, z, w) ((kon_vec4_t){(float)(x), (float)(y), (float)(z), (float)(w)})
+
+#define KON_VEC3_ZERO KON_VEC3(0, 0, 0)
+#define KON_VEC3_ONE KON_VEC3(1, 1, 1)
+#define KON_VEC3_UP KON_VEC3(0, 1, 0)
+
+/* right-handed, +Y up, camera looks down -Z, column-major: m[column * 4 + row] */
+
+typedef struct kon_vec2 { float x, y; } kon_vec2_t;
+typedef struct kon_vec3 { float x, y, z; } kon_vec3_t;
+typedef struct kon_vec4 { float x, y, z, w; } kon_vec4_t;
+typedef struct kon_mat4 { float m[16]; } kon_mat4_t;
+
+/* game is the fixed-size framebuffer you draw into, screen always matches the window */
+typedef struct kon_display {
+	kon_framebuffer_t *game;
+	kon_framebuffer_t *screen;
+	int integerOnly;
+
+	/* where the game image sits inside screen, kept up to date by the functions below */
+	int viewX, viewY, viewWidth, viewHeight;
+	int *columnMap;
+} kon_display_t;
+
+typedef enum kon_projection {
+	KON_PROJECTION_PERSPECTIVE = 0,
+	KON_PROJECTION_ORTHOGRAPHIC
+} kon_projection_t;
+
+typedef struct kon_camera {
+	kon_vec3_t position;
+	kon_vec3_t target;
+	kon_vec3_t up;
+	kon_projection_t projection;
+	float fov;       /* vertical field of view in radians, perspective only */
+	float orthoSize; /* half the visible height in world units, orthographic only */
+	float nearZ, farZ;
+} kon_camera_t;
+
+/* edges holds pairs of indices into vertices */
+typedef struct kon_wireMesh {
+	const kon_vec3_t *vertices;
+	const uint16_t *edges;
+	int edgeCount;
+} kon_wireMesh_t;
+
+/*** 2D declarations ***/
 
 /*** framebuffer declarations ***/
 
@@ -69,33 +129,119 @@ void kon_drawLine(kon_framebuffer_t *fb, int x0, int y0, int x1, int y1, uint32_
 void kon_drawCircle(kon_framebuffer_t *fb, int center_x, int center_y, int radius, uint32_t color);
 void kon_fillCircle(kon_framebuffer_t *fb, int center_x, int center_y, int radius, uint32_t color);
 
+/*** math declarations ***/
+
+/*** scalar declarations ***/
+
+float kon_clamp(float v, float min, float max);
+float kon_lerp(float a, float b, float t);
+
+/*** vec2 declarations ***/
+
+kon_vec2_t kon_vec2Add(kon_vec2_t a, kon_vec2_t b);
+kon_vec2_t kon_vec2Sub(kon_vec2_t a, kon_vec2_t b);
+kon_vec2_t kon_vec2Scale(kon_vec2_t a, float s);
+float kon_vec2Dot(kon_vec2_t a, kon_vec2_t b);
+
+/*** vec3 declarations ***/
+
+kon_vec3_t kon_vec3Add(kon_vec3_t a, kon_vec3_t b);
+kon_vec3_t kon_vec3Sub(kon_vec3_t a, kon_vec3_t b);
+kon_vec3_t kon_vec3Scale(kon_vec3_t a, float s);
+float kon_vec3Dot(kon_vec3_t a, kon_vec3_t b);
+kon_vec3_t kon_vec3Cross(kon_vec3_t a, kon_vec3_t b);
+float kon_vec3Length(kon_vec3_t a);
+kon_vec3_t kon_vec3Normalize(kon_vec3_t a);
+kon_vec3_t kon_vec3Lerp(kon_vec3_t a, kon_vec3_t b, float t);
+
+/*** mat4 declarations ***/
+
+kon_mat4_t kon_mat4Identity(void);
+kon_mat4_t kon_mat4Mul(kon_mat4_t a, kon_mat4_t b);
+kon_vec4_t kon_mat4MulVec4(kon_mat4_t m, kon_vec4_t v);
+kon_vec3_t kon_mat4MulPoint(kon_mat4_t m, kon_vec3_t p);
+
+/* like blender's local/global: the plain versions work along the model's own axes,
+   the World versions along the world's axes. neither rotate nor scale ever moves the model's position.
+   angles are euler angles in radians (x = pitch, y = yaw, z = roll), see KON_DEG3 */
+kon_mat4_t kon_mat4Translate(kon_mat4_t m, kon_vec3_t v);
+kon_mat4_t kon_mat4Rotate(kon_mat4_t m, kon_vec3_t angles);
+kon_mat4_t kon_mat4Scale(kon_mat4_t m, kon_vec3_t v);
+kon_mat4_t kon_mat4TranslateWorld(kon_mat4_t m, kon_vec3_t v);
+kon_mat4_t kon_mat4RotateWorld(kon_mat4_t m, kon_vec3_t angles);
+kon_mat4_t kon_mat4ScaleWorld(kon_mat4_t m, kon_vec3_t v);
+
+kon_mat4_t kon_mat4FromTranslation(kon_vec3_t v);
+kon_mat4_t kon_mat4FromRotation(kon_vec3_t angles);
+kon_mat4_t kon_mat4FromAxisAngle(kon_vec3_t axis, float angle);
+kon_mat4_t kon_mat4FromScale(kon_vec3_t v);
+kon_mat4_t kon_mat4FromTransform(kon_vec3_t position, kon_vec3_t angles, kon_vec3_t scale);
+
+kon_mat4_t kon_mat4LookAt(kon_vec3_t eye, kon_vec3_t target, kon_vec3_t up);
+kon_mat4_t kon_mat4Perspective(float fovY, float aspect, float nearZ, float farZ);
+kon_mat4_t kon_mat4Ortho(float left, float right, float bottom, float top, float nearZ, float farZ);
+
+/*** display declarations ***/
+
+
+kon_display_t *kon_createDisplay(int gameWidth, int gameHeight, int windowWidth, int windowHeight);
+void kon_freeDisplay(kon_display_t *display);
+
+void kon_setGameResolution(kon_display_t *display, int gameWidth, int gameHeight);
+void kon_setIntegerScaling(kon_display_t *display, int integerOnly);
+void kon_resizeDisplay(kon_display_t *display, int windowWidth, int windowHeight);
+
+/* scales game into screen, then blit display->screen to the window */
+void kon_presentDisplay(kon_display_t *display);
+
+/* returns 0 if the window position is on a bar, outside the game image */
+int kon_windowToGame(const kon_display_t *display, int windowX, int windowY, int *gameX, int *gameY);
+
+/*** 3D declarations ***/
+
+/*** camera declarations ***/
+
+kon_camera_t kon_cameraDefault(void);
+kon_mat4_t kon_cameraView(const kon_camera_t *camera);
+kon_mat4_t kon_cameraProjection(const kon_camera_t *camera, int width, int height);
+kon_mat4_t kon_cameraViewProjection(const kon_camera_t *camera, int width, int height);
+
+/*** 3D draw declarations ***/
+
+/* returns 0 if the point is behind the camera */
+int kon_worldToScreen(const kon_framebuffer_t *fb, kon_mat4_t viewProjection, kon_vec3_t point, kon_vec2_t *out);
+
+void kon_drawLine3D(kon_framebuffer_t *fb, kon_mat4_t viewProjection, kon_vec3_t a, kon_vec3_t b, uint32_t color);
+void kon_drawWireMesh(kon_framebuffer_t *fb, kon_mat4_t viewProjection, kon_mat4_t model, const kon_wireMesh_t *mesh, uint32_t color);
+
 /*** implementation ***/
 
 #ifdef KONSOFREN_IMPLEMENTATION
+
 
 /*** private helper ***/
 
 static inline uint32_t kon_blendColor(uint32_t dst, uint32_t src) {
 	
-	uint8_t src_a = (src >> 24) & 0xFF;
-	uint8_t src_r = (src >> 16) & 0xFF;
-	uint8_t src_g = (src >> 8)  & 0xFF;
-	uint8_t src_b = (src >> 0)  & 0xFF;
+	uint8_t src_a = (uint8_t)((src >> 24) & 0xFF);
+	uint8_t src_r = (uint8_t)((src >> 16) & 0xFF);
+	uint8_t src_g = (uint8_t)((src >> 8)  & 0xFF);
+	uint8_t src_b = (uint8_t)((src >> 0)  & 0xFF);
 
 	if (src_a == 0xFF) {
 		return src;
 	}
 
-	uint8_t dst_a = (dst >> 24) & 0xFF;
-	uint8_t dst_r = (dst >> 16) & 0xFF;
-	uint8_t dst_g = (dst >> 8)  & 0xFF;
-	uint8_t dst_b = (dst >> 0)  & 0xFF;
+	uint8_t dst_a = (uint8_t)((dst >> 24) & 0xFF);
+	uint8_t dst_r = (uint8_t)((dst >> 16) & 0xFF);
+	uint8_t dst_g = (uint8_t)((dst >> 8)  & 0xFF);
+	uint8_t dst_b = (uint8_t)((dst >> 0)  & 0xFF);
 
-	uint8_t inv_a = 255 - src_a;
+	uint8_t inv_a = (uint8_t)(255 - src_a);
 
-	uint8_t out_r = (src_r * src_a + dst_r * inv_a) / 255;
-	uint8_t out_g = (src_g * src_a + dst_g * inv_a) / 255;
-	uint8_t out_b = (src_b * src_a + dst_b * inv_a) / 255;
+	uint8_t out_r = (uint8_t)((src_r * src_a + dst_r * inv_a) / 255);
+	uint8_t out_g = (uint8_t)((src_g * src_a + dst_g * inv_a) / 255);
+	uint8_t out_b = (uint8_t)((src_b * src_a + dst_b * inv_a) / 255);
 
 	return ((uint32_t)dst_a << 24) | ((uint32_t)out_r << 16) | ((uint32_t)out_g << 8) | (uint32_t)out_b;
 }
@@ -154,7 +300,7 @@ kon_framebuffer_t *kon_createFramebuffer(int width, int height) {
 	kon_framebuffer_t *fb = malloc(sizeof(kon_framebuffer_t));
 	if (!fb) return NULL;
 
-	fb->data = calloc((size_t)width * height, sizeof(uint32_t));
+	fb->data = calloc((size_t)width * (size_t)height, sizeof(uint32_t));
 	if (!fb->data) {
 		free(fb);
 		return NULL;
@@ -193,7 +339,7 @@ void kon_clearFramebuffer(kon_framebuffer_t *fb, uint32_t color) {
 void kon_resizeFramebuffer(kon_framebuffer_t *fb, int width, int height) {
 	if (!fb) return;
 
-	uint32_t *tmp = realloc(fb->data, (size_t)width * height * sizeof(uint32_t));
+	uint32_t *tmp = realloc(fb->data, (size_t)width * (size_t)height * sizeof(uint32_t));
 	if (!tmp) return;
 
 	fb->data = tmp;
@@ -376,7 +522,7 @@ kon_image *kon_loadImage(const uint8_t *pixels, int width, int height, kon_image
 	kon_image *image = malloc(sizeof(kon_image));
 	if (!image) return NULL;
 
-	image->data = malloc((size_t)width * height * sizeof(uint32_t));
+	image->data = malloc((size_t)width * (size_t)height * sizeof(uint32_t));
 	if (!image->data) {
 		free(image);
 		return NULL;
@@ -448,5 +594,419 @@ void kon_drawImage(kon_framebuffer_t *fb, int x, int y, int width, int height, k
 	}
 }
 
-#endif
+/*** math implementation ***/
+
+
+/*** scalar ***/
+
+float kon_clamp(float v, float min, float max) { return v < min ? min : (v > max ? max : v); }
+float kon_lerp(float a, float b, float t) { return a + (b - a) * t; }
+
+/*** vec2 ***/
+
+kon_vec2_t kon_vec2Add(kon_vec2_t a, kon_vec2_t b) { return (kon_vec2_t){a.x + b.x, a.y + b.y}; }
+kon_vec2_t kon_vec2Sub(kon_vec2_t a, kon_vec2_t b) { return (kon_vec2_t){a.x - b.x, a.y - b.y}; }
+kon_vec2_t kon_vec2Scale(kon_vec2_t a, float s) { return (kon_vec2_t){a.x * s, a.y * s}; }
+float kon_vec2Dot(kon_vec2_t a, kon_vec2_t b) { return a.x * b.x + a.y * b.y; }
+
+/*** vec3 ***/
+
+kon_vec3_t kon_vec3Add(kon_vec3_t a, kon_vec3_t b) { return (kon_vec3_t){a.x + b.x, a.y + b.y, a.z + b.z}; }
+kon_vec3_t kon_vec3Sub(kon_vec3_t a, kon_vec3_t b) { return (kon_vec3_t){a.x - b.x, a.y - b.y, a.z - b.z}; }
+kon_vec3_t kon_vec3Scale(kon_vec3_t a, float s) { return (kon_vec3_t){a.x * s, a.y * s, a.z * s}; }
+float kon_vec3Dot(kon_vec3_t a, kon_vec3_t b) { return a.x * b.x + a.y * b.y + a.z * b.z; }
+
+kon_vec3_t kon_vec3Cross(kon_vec3_t a, kon_vec3_t b) {
+	return (kon_vec3_t){
+		a.y * b.z - a.z * b.y,
+		a.z * b.x - a.x * b.z,
+		a.x * b.y - a.y * b.x
+	};
+}
+
+float kon_vec3Length(kon_vec3_t a) { return sqrtf(kon_vec3Dot(a, a)); }
+
+kon_vec3_t kon_vec3Normalize(kon_vec3_t a) {
+	float len = kon_vec3Length(a);
+	return len > 0.0f ? kon_vec3Scale(a, 1.0f / len) : a;
+}
+
+kon_vec3_t kon_vec3Lerp(kon_vec3_t a, kon_vec3_t b, float t) {
+	return (kon_vec3_t){kon_lerp(a.x, b.x, t), kon_lerp(a.y, b.y, t), kon_lerp(a.z, b.z, t)};
+}
+
+/*** mat4 ***/
+
+kon_mat4_t kon_mat4Identity(void) {
+	kon_mat4_t r = {{0}};
+	r.m[0] = r.m[5] = r.m[10] = r.m[15] = 1.0f;
+	return r;
+}
+
+/* returns a * b, b is applied first */
+kon_mat4_t kon_mat4Mul(kon_mat4_t a, kon_mat4_t b) {
+	kon_mat4_t r;
+	for (int c = 0; c < 4; c++) {
+		for (int row = 0; row < 4; row++) {
+			float sum = 0.0f;
+			for (int k = 0; k < 4; k++) {
+				sum += a.m[k * 4 + row] * b.m[c * 4 + k];
+			}
+			r.m[c * 4 + row] = sum;
+		}
+	}
+	return r;
+}
+
+kon_vec4_t kon_mat4MulVec4(kon_mat4_t m, kon_vec4_t v) {
+	return (kon_vec4_t){
+		m.m[0] * v.x + m.m[4] * v.y + m.m[8]  * v.z + m.m[12] * v.w,
+		m.m[1] * v.x + m.m[5] * v.y + m.m[9]  * v.z + m.m[13] * v.w,
+		m.m[2] * v.x + m.m[6] * v.y + m.m[10] * v.z + m.m[14] * v.w,
+		m.m[3] * v.x + m.m[7] * v.y + m.m[11] * v.z + m.m[15] * v.w
+	};
+}
+
+kon_vec3_t kon_mat4MulPoint(kon_mat4_t m, kon_vec3_t p) {
+	kon_vec4_t r = kon_mat4MulVec4(m, (kon_vec4_t){p.x, p.y, p.z, 1.0f});
+	return (kon_vec3_t){r.x, r.y, r.z};
+}
+
+kon_mat4_t kon_mat4FromTranslation(kon_vec3_t v) {
+	kon_mat4_t r = kon_mat4Identity();
+	r.m[12] = v.x;
+	r.m[13] = v.y;
+	r.m[14] = v.z;
+	return r;
+}
+
+kon_mat4_t kon_mat4FromScale(kon_vec3_t v) {
+	kon_mat4_t r = kon_mat4Identity();
+	r.m[0] = v.x;
+	r.m[5] = v.y;
+	r.m[10] = v.z;
+	return r;
+}
+
+kon_mat4_t kon_mat4FromAxisAngle(kon_vec3_t axis, float angle) {
+	kon_vec3_t a = kon_vec3Normalize(axis);
+	float c = cosf(angle), s = sinf(angle), t = 1.0f - c;
+	kon_mat4_t r = kon_mat4Identity();
+	r.m[0] = t * a.x * a.x + c;
+	r.m[1] = t * a.x * a.y + s * a.z;
+	r.m[2] = t * a.x * a.z - s * a.y;
+	r.m[4] = t * a.x * a.y - s * a.z;
+	r.m[5] = t * a.y * a.y + c;
+	r.m[6] = t * a.y * a.z + s * a.x;
+	r.m[8] = t * a.x * a.z + s * a.y;
+	r.m[9] = t * a.y * a.z - s * a.x;
+	r.m[10] = t * a.z * a.z + c;
+	return r;
+}
+
+/* applied in order roll (z), pitch (x), yaw (y) */
+kon_mat4_t kon_mat4FromRotation(kon_vec3_t angles) {
+	kon_mat4_t x = kon_mat4FromAxisAngle(KON_VEC3(1, 0, 0), angles.x);
+	kon_mat4_t y = kon_mat4FromAxisAngle(KON_VEC3(0, 1, 0), angles.y);
+	kon_mat4_t z = kon_mat4FromAxisAngle(KON_VEC3(0, 0, 1), angles.z);
+	return kon_mat4Mul(y, kon_mat4Mul(x, z));
+}
+
+kon_mat4_t kon_mat4FromTransform(kon_vec3_t position, kon_vec3_t angles, kon_vec3_t scale) {
+	kon_mat4_t r = kon_mat4Mul(kon_mat4FromRotation(angles), kon_mat4FromScale(scale));
+	return kon_mat4Mul(kon_mat4FromTranslation(position), r);
+}
+
+kon_mat4_t kon_mat4Translate(kon_mat4_t m, kon_vec3_t v) { return kon_mat4Mul(m, kon_mat4FromTranslation(v)); }
+kon_mat4_t kon_mat4Rotate(kon_mat4_t m, kon_vec3_t angles) { return kon_mat4Mul(m, kon_mat4FromRotation(angles)); }
+kon_mat4_t kon_mat4Scale(kon_mat4_t m, kon_vec3_t v) { return kon_mat4Mul(m, kon_mat4FromScale(v)); }
+kon_mat4_t kon_mat4TranslateWorld(kon_mat4_t m, kon_vec3_t v) { return kon_mat4Mul(kon_mat4FromTranslation(v), m); }
+
+/* pre-multiplying would also swing the position around the world origin, so put it back */
+kon_mat4_t kon_mat4RotateWorld(kon_mat4_t m, kon_vec3_t angles) {
+	kon_mat4_t r = kon_mat4Mul(kon_mat4FromRotation(angles), m);
+	r.m[12] = m.m[12];
+	r.m[13] = m.m[13];
+	r.m[14] = m.m[14];
+	return r;
+}
+
+kon_mat4_t kon_mat4ScaleWorld(kon_mat4_t m, kon_vec3_t v) {
+	kon_mat4_t r = kon_mat4Mul(kon_mat4FromScale(v), m);
+	r.m[12] = m.m[12];
+	r.m[13] = m.m[13];
+	r.m[14] = m.m[14];
+	return r;
+}
+
+kon_mat4_t kon_mat4LookAt(kon_vec3_t eye, kon_vec3_t target, kon_vec3_t up) {
+	kon_vec3_t f = kon_vec3Normalize(kon_vec3Sub(target, eye));
+	kon_vec3_t s = kon_vec3Normalize(kon_vec3Cross(f, up));
+	kon_vec3_t u = kon_vec3Cross(s, f);
+
+	kon_mat4_t r = kon_mat4Identity();
+	r.m[0] = s.x;  r.m[4] = s.y;  r.m[8]  = s.z;  r.m[12] = -kon_vec3Dot(s, eye);
+	r.m[1] = u.x;  r.m[5] = u.y;  r.m[9]  = u.z;  r.m[13] = -kon_vec3Dot(u, eye);
+	r.m[2] = -f.x; r.m[6] = -f.y; r.m[10] = -f.z; r.m[14] =  kon_vec3Dot(f, eye);
+	return r;
+}
+
+/* fovY in radians, aspect = width / height */
+kon_mat4_t kon_mat4Perspective(float fovY, float aspect, float nearZ, float farZ) {
+	kon_mat4_t r = {{0}};
+	float f = 1.0f / tanf(fovY * 0.5f);
+	r.m[0] = f / aspect;
+	r.m[5] = f;
+	r.m[10] = (farZ + nearZ) / (nearZ - farZ);
+	r.m[11] = -1.0f;
+	r.m[14] = (2.0f * farZ * nearZ) / (nearZ - farZ);
+	return r;
+}
+
+kon_mat4_t kon_mat4Ortho(float left, float right, float bottom, float top, float nearZ, float farZ) {
+	kon_mat4_t r = kon_mat4Identity();
+	r.m[0] = 2.0f / (right - left);
+	r.m[5] = 2.0f / (top - bottom);
+	r.m[10] = -2.0f / (farZ - nearZ);
+	r.m[12] = -(right + left) / (right - left);
+	r.m[13] = -(top + bottom) / (top - bottom);
+	r.m[14] = -(farZ + nearZ) / (farZ - nearZ);
+	return r;
+}
+
+
+/*** display implementation ***/
+
+static void kon_updateView_(kon_display_t *display) {
+	int gameWidth = display->game->width, gameHeight = display->game->height;
+	int windowWidth = display->screen->width, windowHeight = display->screen->height;
+
+	int scaleX = windowWidth / gameWidth;
+	int scaleY = windowHeight / gameHeight;
+	int scale = (scaleX < scaleY) ? scaleX : scaleY;
+
+	if (display->integerOnly && scale >= 1) {
+		display->viewWidth  = gameWidth  * scale;
+		display->viewHeight = gameHeight * scale;
+	} else if ((int64_t)windowWidth * gameHeight <= (int64_t)windowHeight * gameWidth) {
+		/* window is narrower than the game: bars on top and bottom */
+		display->viewWidth  = windowWidth;
+		display->viewHeight = (int)((int64_t)windowWidth * gameHeight / gameWidth);
+	} else {
+		/* window is wider than the game: bars on the sides */
+		display->viewHeight = windowHeight;
+		display->viewWidth  = (int)((int64_t)windowHeight * gameWidth / gameHeight);
+	}
+
+	display->viewX = (windowWidth  - display->viewWidth)  / 2;
+	display->viewY = (windowHeight - display->viewHeight) / 2;
+
+	/* which game column each view column shows, worked out once instead of for every pixel */
+	int *map = realloc(display->columnMap, (size_t)windowWidth * sizeof(int));
+	if (!map) {
+		display->viewWidth = 0;
+		return;
+	}
+	display->columnMap = map;
+
+	for (int x = 0; x < display->viewWidth; x++) {
+		map[x] = (int)((int64_t)x * gameWidth / display->viewWidth);
+	}
+}
+
+kon_display_t *kon_createDisplay(int gameWidth, int gameHeight, int windowWidth, int windowHeight) {
+	if (gameWidth <= 0 || gameHeight <= 0 || windowWidth <= 0 || windowHeight <= 0) return NULL;
+
+	kon_display_t *display = calloc(1, sizeof(kon_display_t));
+	if (!display) return NULL;
+
+	display->game   = kon_createFramebuffer(gameWidth, gameHeight);
+	display->screen = kon_createFramebuffer(windowWidth, windowHeight);
+	if (!display->game || !display->screen) {
+		kon_freeDisplay(display);
+		return NULL;
+	}
+
+	kon_clearFramebuffer(display->game, KON_BACKGROUND_COLOR);
+	kon_updateView_(display);
+	return display;
+}
+
+void kon_freeDisplay(kon_display_t *display) {
+	if (!display) return;
+
+	kon_freeFramebuffer(display->game);
+	kon_freeFramebuffer(display->screen);
+	free(display->columnMap);
+	free(display);
+}
+
+void kon_setGameResolution(kon_display_t *display, int gameWidth, int gameHeight) {
+	if (!display || gameWidth <= 0 || gameHeight <= 0) return;
+
+	kon_resizeFramebuffer(display->game, gameWidth, gameHeight);
+	kon_updateView_(display);
+}
+
+void kon_setIntegerScaling(kon_display_t *display, int integerOnly) {
+	if (!display) return;
+
+	display->integerOnly = integerOnly;
+	kon_updateView_(display);
+}
+
+void kon_resizeDisplay(kon_display_t *display, int windowWidth, int windowHeight) {
+	if (!display || windowWidth <= 0 || windowHeight <= 0) return;
+
+	kon_resizeFramebuffer(display->screen, windowWidth, windowHeight);
+	kon_updateView_(display);
+}
+
+void kon_presentDisplay(kon_display_t *display) {
+	if (!display) return;
+
+	const uint32_t barColor = 0xFF000000;
+	kon_framebuffer_t *game = display->game;
+	kon_framebuffer_t *screen = display->screen;
+	int rightX = display->viewX + display->viewWidth;
+
+	for (int y = 0; y < screen->height; y++) {
+		uint32_t *row = &screen->data[(size_t)y * (size_t)screen->width];
+
+		if (display->viewWidth <= 0 || y < display->viewY || y >= display->viewY + display->viewHeight) {
+			for (int x = 0; x < screen->width; x++) row[x] = barColor;
+			continue;
+		}
+
+		int srcY = (int)((int64_t)(y - display->viewY) * game->height / display->viewHeight);
+		const uint32_t *srcRow = &game->data[(size_t)srcY * (size_t)game->width];
+
+		for (int x = 0; x < display->viewX; x++) row[x] = barColor;
+		for (int x = 0; x < display->viewWidth; x++) row[display->viewX + x] = srcRow[display->columnMap[x]];
+		for (int x = rightX; x < screen->width; x++) row[x] = barColor;
+	}
+}
+
+int kon_windowToGame(const kon_display_t *display, int windowX, int windowY, int *gameX, int *gameY) {
+	if (!display || display->viewWidth <= 0 || display->viewHeight <= 0) return 0;
+
+	int localX = windowX - display->viewX;
+	int localY = windowY - display->viewY;
+	if (localX < 0 || localX >= display->viewWidth || localY < 0 || localY >= display->viewHeight) return 0;
+
+	if (gameX) *gameX = (int)((int64_t)localX * display->game->width  / display->viewWidth);
+	if (gameY) *gameY = (int)((int64_t)localY * display->game->height / display->viewHeight);
+	return 1;
+}
+
+/*** 3D implementation ***/
+
+
+/*** private helper ***/
+
+static kon_vec2_t kon_clipToScreen_(const kon_framebuffer_t *fb, kon_vec4_t clip) {
+	/* clamped so the later float to int conversion can't overflow */
+	float ndcX = kon_clamp(clip.x / clip.w, -1.0e5f, 1.0e5f);
+	float ndcY = kon_clamp(clip.y / clip.w, -1.0e5f, 1.0e5f);
+
+	/* screen +Y points down, NDC +Y points up */
+	return KON_VEC2((ndcX + 1.0f) * 0.5f * (float)fb->width, (1.0f - ndcY) * 0.5f * (float)fb->height);
+}
+
+/*** camera implementation ***/
+
+kon_camera_t kon_cameraDefault(void) {
+	kon_camera_t camera;
+	camera.position = KON_VEC3(0, 0, 5);
+	camera.target = KON_VEC3_ZERO;
+	camera.up = KON_VEC3_UP;
+	camera.projection = KON_PROJECTION_PERSPECTIVE;
+	camera.fov = KON_DEG2RAD(60);
+	camera.orthoSize = 5.0f;
+	camera.nearZ = 0.1f;
+	camera.farZ = 100.0f;
+	return camera;
+}
+
+kon_mat4_t kon_cameraView(const kon_camera_t *camera) {
+	return kon_mat4LookAt(camera->position, camera->target, camera->up);
+}
+
+kon_mat4_t kon_cameraProjection(const kon_camera_t *camera, int width, int height) {
+	float aspect = (height > 0) ? (float)width / (float)height : 1.0f;
+
+	if (camera->projection == KON_PROJECTION_ORTHOGRAPHIC) {
+		float halfH = camera->orthoSize;
+		float halfW = halfH * aspect;
+		return kon_mat4Ortho(-halfW, halfW, -halfH, halfH, camera->nearZ, camera->farZ);
+	}
+
+	return kon_mat4Perspective(camera->fov, aspect, camera->nearZ, camera->farZ);
+}
+
+kon_mat4_t kon_cameraViewProjection(const kon_camera_t *camera, int width, int height) {
+	return kon_mat4Mul(kon_cameraProjection(camera, width, height), kon_cameraView(camera));
+}
+
+/*** 3D draw implementation ***/
+
+int kon_worldToScreen(const kon_framebuffer_t *fb, kon_mat4_t viewProjection, kon_vec3_t point, kon_vec2_t *out) {
+	if (!fb || !out) return 0;
+
+	kon_vec4_t clip = kon_mat4MulVec4(viewProjection, KON_VEC4(point.x, point.y, point.z, 1));
+
+	/* in front of the near plane when z >= -w */
+	if (clip.z < -clip.w || clip.w <= 0.0f) return 0;
+
+	*out = kon_clipToScreen_(fb, clip);
+	return 1;
+}
+
+void kon_drawLine3D(kon_framebuffer_t *fb, kon_mat4_t viewProjection, kon_vec3_t a, kon_vec3_t b, uint32_t color) {
+	if (!fb) return;
+
+	kon_vec4_t ca = kon_mat4MulVec4(viewProjection, KON_VEC4(a.x, a.y, a.z, 1));
+	kon_vec4_t cb = kon_mat4MulVec4(viewProjection, KON_VEC4(b.x, b.y, b.z, 1));
+
+	/* clip against the near plane (z + w >= 0) before dividing, so points behind the camera never get projected */
+	float da = ca.z + ca.w;
+	float db = cb.z + cb.w;
+
+	if (da < 0.0f && db < 0.0f) return;
+
+	if (da < 0.0f || db < 0.0f) {
+		float t = da / (da - db);
+		kon_vec4_t hit = KON_VEC4(
+			ca.x + (cb.x - ca.x) * t,
+			ca.y + (cb.y - ca.y) * t,
+			ca.z + (cb.z - ca.z) * t,
+			ca.w + (cb.w - ca.w) * t
+		);
+
+		if (da < 0.0f) ca = hit;
+		else cb = hit;
+	}
+
+	if (ca.w <= 0.0f || cb.w <= 0.0f) return;
+
+	kon_vec2_t sa = kon_clipToScreen_(fb, ca);
+	kon_vec2_t sb = kon_clipToScreen_(fb, cb);
+
+	kon_drawLine(fb, (int)sa.x, (int)sa.y, (int)sb.x, (int)sb.y, color);
+}
+
+void kon_drawWireMesh(kon_framebuffer_t *fb, kon_mat4_t viewProjection, kon_mat4_t model, const kon_wireMesh_t *mesh, uint32_t color) {
+	if (!fb || !mesh) return;
+
+	kon_mat4_t mvp = kon_mat4Mul(viewProjection, model);
+
+	for (int i = 0; i < mesh->edgeCount; i++) {
+		kon_vec3_t a = mesh->vertices[mesh->edges[i * 2 + 0]];
+		kon_vec3_t b = mesh->vertices[mesh->edges[i * 2 + 1]];
+		kon_drawLine3D(fb, mvp, a, b, color);
+	}
+}
+
+#endif /* end of KONSOFREN_IMPLEMENTATION */
+
 #endif
