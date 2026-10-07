@@ -108,16 +108,32 @@ typedef enum kon_renderFlags {
 	KON_RENDER_NONE = 0,
 	KON_RENDER_WIREFRAME = 1 << 0,
 	KON_RENDER_DEPTH = 1 << 1,
-	KON_RENDER_CULL_BACK = 1 << 2
+	KON_RENDER_CULL_BACK = 1 << 2,
+	KON_RENDER_FLAT = 1 << 3 /* light each triangle as a whole instead of smoothly across its vertex normals */
 } kon_renderFlags_t;
 
 #define KON_RENDER_DEFAULT ((kon_renderFlags_t)(KON_RENDER_DEPTH | KON_RENDER_CULL_BACK))
 
-/* uv (0, 0) is the top-left of the texture, (1, 1) the bottom-right */
+/* normal points away from the surface and is only used for lighting, uv (0, 0) is the top-left of the texture, (1, 1) the bottom-right */
 typedef struct kon_vertex {
 	kon_vec3_t position;
+	kon_vec3_t normal;
 	kon_vec2_t uv;
 } kon_vertex_t;
+
+/* texture is used when it isn't NULL, otherwise color */
+typedef struct kon_material {
+	const kon_image *texture;
+	uint32_t color;
+} kon_material_t;
+
+/* one light from far away, like the sun, plus a base light that reaches everything */
+typedef struct kon_light {
+	kon_vec3_t direction; /* the way the light travels, (0, -1, 0) shines straight down */
+	uint32_t color;       /* 0xFFRRGGBB, alpha is ignored */
+	float intensity;      /* strength of the directional part, 0 to 1 */
+	float ambient;        /* strength of the base light, 0 to 1 */
+} kon_light_t;
 
 /* front faces are counter-clockwise, indices hold three entries per triangle */
 typedef struct kon_mesh {
@@ -237,9 +253,13 @@ int kon_worldToScreen(const kon_framebuffer_t *fb, kon_mat4_t viewProjection, ko
 void kon_drawLine3D(kon_framebuffer_t *fb, kon_mat4_t viewProjection, kon_vec3_t a, kon_vec3_t b, uint32_t color);
 void kon_drawWireMesh(kon_framebuffer_t *fb, kon_mat4_t viewProjection, kon_mat4_t model, const kon_wireMesh_t *mesh, uint32_t color);
 
-/* texture is used when it isn't NULL, otherwise the triangle is filled with color */
-void kon_drawTriangle3D(kon_framebuffer_t *fb, kon_mat4_t viewProjection, kon_vertex_t a, kon_vertex_t b, kon_vertex_t c, const kon_image *texture, uint32_t color, kon_renderFlags_t flags);
-void kon_drawMesh(kon_framebuffer_t *fb, kon_mat4_t viewProjection, kon_mat4_t model, const kon_mesh_t *mesh, const kon_image *texture, uint32_t color, kon_renderFlags_t flags);
+kon_material_t kon_materialColor(uint32_t color);
+kon_material_t kon_materialTexture(const kon_image *texture);
+kon_light_t kon_lightDefault(void);
+
+/* light can be NULL for no lighting. the triangle's positions and normals are in world space */
+void kon_drawTriangle3D(kon_framebuffer_t *fb, kon_mat4_t viewProjection, kon_vertex_t a, kon_vertex_t b, kon_vertex_t c, const kon_material_t *material, const kon_light_t *light, kon_renderFlags_t flags);
+void kon_drawMesh(kon_framebuffer_t *fb, kon_mat4_t viewProjection, kon_mat4_t model, const kon_mesh_t *mesh, const kon_material_t *material, const kon_light_t *light, kon_renderFlags_t flags);
 
 /* cube from -1 to 1 with every face mapped to the whole texture */
 extern const kon_mesh_t kon_cubeMesh;
@@ -1050,10 +1070,51 @@ void kon_drawWireMesh(kon_framebuffer_t *fb, kon_mat4_t viewProjection, kon_mat4
 	}
 }
 
+kon_material_t kon_materialColor(uint32_t color) {
+	kon_material_t material = { NULL, color };
+	return material;
+}
+
+kon_material_t kon_materialTexture(const kon_image *texture) {
+	kon_material_t material = { texture, 0xFFFFFFFF };
+	return material;
+}
+
+kon_light_t kon_lightDefault(void) {
+	kon_light_t light;
+	light.direction = KON_VEC3(-0.5f, -1.0f, -0.3f);
+	light.color = 0xFFFFFFFF;
+	light.intensity = 0.8f;
+	light.ambient = 0.3f;
+	return light;
+}
+
+/* how bright a surface with this normal is, 0 to 1. toLight points at the light and has length 1 */
+static double kon_lightFactor_(const kon_light_t *light, kon_vec3_t toLight, kon_vec3_t normal) {
+	double diffuse = (double)kon_vec3Dot(kon_vec3Normalize(normal), toLight);
+	if (diffuse < 0.0) diffuse = 0.0;
+
+	double factor = (double)light->ambient + (double)light->intensity * diffuse;
+	return factor > 1.0 ? 1.0 : (factor < 0.0 ? 0.0 : factor);
+}
+
+static uint32_t kon_applyLight_(uint32_t color, double factor, const double rgb[3]) {
+	uint32_t out = color & 0xFF000000u;
+
+	for (int i = 0; i < 3; i++) {
+		int shift = 16 - i * 8;
+		double channel = (double)((color >> shift) & 0xFF) * rgb[i] * factor;
+		out |= (channel >= 255.0 ? 255u : (uint32_t)(channel + 0.5)) << shift;
+	}
+
+	return out;
+}
+
 /* the triangle rasterizer works in doubles so huge coordinates near the camera don't lose precision */
 typedef struct kon_rasterVertex {
 	double x, y, z, w; /* clip space */
 	double u, v;
+	double light;
 } kon_rasterVertex_t;
 
 static kon_rasterVertex_t kon_lerpRasterVertex_(kon_rasterVertex_t a, kon_rasterVertex_t b, double t) {
@@ -1064,6 +1125,7 @@ static kon_rasterVertex_t kon_lerpRasterVertex_(kon_rasterVertex_t a, kon_raster
 	r.w = a.w + (b.w - a.w) * t;
 	r.u = a.u + (b.u - a.u) * t;
 	r.v = a.v + (b.v - a.v) * t;
+	r.light = a.light + (b.light - a.light) * t;
 	return r;
 }
 
@@ -1089,9 +1151,9 @@ static double kon_edge_(double ax, double ay, double bx, double by, double px, d
 }
 
 static void kon_rasterizeTriangle_(kon_framebuffer_t *fb, const kon_rasterVertex_t *a, const kon_rasterVertex_t *b, const kon_rasterVertex_t *c,
-		const kon_image *texture, uint32_t color, kon_renderFlags_t flags) {
+		const kon_material_t *material, const kon_light_t *light, kon_renderFlags_t flags) {
 	const kon_rasterVertex_t *in[3] = {a, b, c};
-	double sx[3], sy[3], sz[3], invW[3], uw[3], vw[3];
+	double sx[3], sy[3], sz[3], invW[3], uw[3], vw[3], lw[3];
 
 	for (int i = 0; i < 3; i++) {
 		if (in[i]->w <= 1.0e-12) return;
@@ -1101,6 +1163,7 @@ static void kon_rasterizeTriangle_(kon_framebuffer_t *fb, const kon_rasterVertex
 		sz[i] = in[i]->z * invW[i];
 		uw[i] = in[i]->u * invW[i];
 		vw[i] = in[i]->v * invW[i];
+		lw[i] = in[i]->light * invW[i];
 	}
 
 	/* screen +Y points down, so a counter-clockwise (front) triangle has a negative area here */
@@ -1118,6 +1181,7 @@ static void kon_rasterizeTriangle_(kon_framebuffer_t *fb, const kon_rasterVertex
 		t = invW[1]; invW[1] = invW[2]; invW[2] = t;
 		t = uw[1]; uw[1] = uw[2]; uw[2] = t;
 		t = vw[1]; vw[1] = vw[2]; vw[2] = t;
+		t = lw[1]; lw[1] = lw[2]; lw[2] = t;
 		area = -area;
 	}
 
@@ -1151,6 +1215,14 @@ static void kon_rasterizeTriangle_(kon_framebuffer_t *fb, const kon_rasterVertex
 	double invArea = 1.0 / area;
 
 	int useDepth = (flags & KON_RENDER_DEPTH) != 0;
+	const kon_image *texture = material->texture;
+
+	double lightRgb[3] = {1.0, 1.0, 1.0};
+	if (light) {
+		lightRgb[0] = (double)((light->color >> 16) & 0xFF) / 255.0;
+		lightRgb[1] = (double)((light->color >> 8)  & 0xFF) / 255.0;
+		lightRgb[2] = (double)((light->color >> 0)  & 0xFF) / 255.0;
+	}
 
 	for (int y = y0; y <= y1; y++) {
 		double e0 = e0Row, e1 = e1Row, e2 = e2Row;
@@ -1162,11 +1234,11 @@ static void kon_rasterizeTriangle_(kon_framebuffer_t *fb, const kon_rasterVertex
 				double z = l0 * sz[0] + l1 * sz[1] + l2 * sz[2];
 
 				if (!useDepth || z < (double)fb->depth[index]) {
-					uint32_t texel = color;
+					uint32_t texel = material->color;
+					double iw = l0 * invW[0] + l1 * invW[1] + l2 * invW[2];
 
 					if (texture) {
 						/* uv / w is what varies linearly on screen, dividing by 1 / w again undoes the perspective */
-						double iw = l0 * invW[0] + l1 * invW[1] + l2 * invW[2];
 						double u = (l0 * uw[0] + l1 * uw[1] + l2 * uw[2]) / iw;
 						double v = (l0 * vw[0] + l1 * vw[1] + l2 * vw[2]) / iw;
 
@@ -1179,6 +1251,10 @@ static void kon_rasterizeTriangle_(kon_framebuffer_t *fb, const kon_rasterVertex
 						if (ty > texture->height - 1) ty = texture->height - 1;
 
 						texel = texture->data[(size_t)ty * (size_t)texture->width + (size_t)tx];
+					}
+
+					if (light) {
+						texel = kon_applyLight_(texel, (l0 * lw[0] + l1 * lw[1] + l2 * lw[2]) / iw, lightRgb);
 					}
 
 					uint32_t alpha = texel >> 24;
@@ -1198,17 +1274,9 @@ static void kon_rasterizeTriangle_(kon_framebuffer_t *fb, const kon_rasterVertex
 	}
 }
 
-void kon_drawTriangle3D(kon_framebuffer_t *fb, kon_mat4_t viewProjection, kon_vertex_t a, kon_vertex_t b, kon_vertex_t c,
-		const kon_image *texture, uint32_t color, kon_renderFlags_t flags) {
-	if (!fb) return;
-
-	if (flags & KON_RENDER_WIREFRAME) {
-		kon_drawLine3D(fb, viewProjection, a.position, b.position, color);
-		kon_drawLine3D(fb, viewProjection, b.position, c.position, color);
-		kon_drawLine3D(fb, viewProjection, c.position, a.position, color);
-		return;
-	}
-
+/* projects, clips and rasterizes one triangle, brightness holds the light factor of each vertex */
+static void kon_submitTriangle_(kon_framebuffer_t *fb, kon_mat4_t mvp, const kon_vertex_t *source[3], const double brightness[3],
+		const kon_material_t *material, const kon_light_t *light, kon_renderFlags_t flags) {
 	if ((flags & KON_RENDER_DEPTH) && !fb->depth) {
 		fb->depth = malloc((size_t)fb->width * (size_t)fb->height * sizeof(float));
 		if (!fb->depth) return;
@@ -1218,46 +1286,121 @@ void kon_drawTriangle3D(kon_framebuffer_t *fb, kon_mat4_t viewProjection, kon_ve
 		}
 	}
 
-	const kon_vertex_t *source[3] = {&a, &b, &c};
 	kon_rasterVertex_t in[3], clipped[4];
 
 	for (int i = 0; i < 3; i++) {
-		kon_vec4_t clip = kon_mat4MulVec4(viewProjection, KON_VEC4(source[i]->position.x, source[i]->position.y, source[i]->position.z, 1));
+		kon_vec4_t clip = kon_mat4MulVec4(mvp, KON_VEC4(source[i]->position.x, source[i]->position.y, source[i]->position.z, 1));
 		in[i].x = clip.x; in[i].y = clip.y; in[i].z = clip.z; in[i].w = clip.w;
 		in[i].u = source[i]->uv.x;
 		in[i].v = source[i]->uv.y;
+		in[i].light = brightness[i];
 	}
 
 	int count = kon_clipNear_(in, clipped);
 	for (int i = 1; i + 1 < count; i++) {
-		kon_rasterizeTriangle_(fb, &clipped[0], &clipped[i], &clipped[i + 1], texture, color, flags);
+		kon_rasterizeTriangle_(fb, &clipped[0], &clipped[i], &clipped[i + 1], material, light, flags);
 	}
 }
 
+static kon_vec3_t kon_faceNormal_(kon_vec3_t a, kon_vec3_t b, kon_vec3_t c) {
+	return kon_vec3Normalize(kon_vec3Cross(kon_vec3Sub(b, a), kon_vec3Sub(c, a)));
+}
+
+void kon_drawTriangle3D(kon_framebuffer_t *fb, kon_mat4_t viewProjection, kon_vertex_t a, kon_vertex_t b, kon_vertex_t c,
+		const kon_material_t *material, const kon_light_t *light, kon_renderFlags_t flags) {
+	if (!fb || !material) return;
+
+	if (flags & KON_RENDER_WIREFRAME) {
+		kon_drawLine3D(fb, viewProjection, a.position, b.position, material->color);
+		kon_drawLine3D(fb, viewProjection, b.position, c.position, material->color);
+		kon_drawLine3D(fb, viewProjection, c.position, a.position, material->color);
+		return;
+	}
+
+	const kon_vertex_t *source[3] = {&a, &b, &c};
+	double brightness[3] = {1.0, 1.0, 1.0};
+
+	if (light) {
+		kon_vec3_t toLight = kon_vec3Scale(kon_vec3Normalize(light->direction), -1.0f);
+
+		if (flags & KON_RENDER_FLAT) {
+			double factor = kon_lightFactor_(light, toLight, kon_faceNormal_(a.position, b.position, c.position));
+			brightness[0] = brightness[1] = brightness[2] = factor;
+		} else {
+			for (int i = 0; i < 3; i++) brightness[i] = kon_lightFactor_(light, toLight, source[i]->normal);
+		}
+	}
+
+	kon_submitTriangle_(fb, viewProjection, source, brightness, material, light, flags);
+}
+
 void kon_drawMesh(kon_framebuffer_t *fb, kon_mat4_t viewProjection, kon_mat4_t model, const kon_mesh_t *mesh,
-		const kon_image *texture, uint32_t color, kon_renderFlags_t flags) {
-	if (!fb || !mesh) return;
+		const kon_material_t *material, const kon_light_t *light, kon_renderFlags_t flags) {
+	if (!fb || !mesh || !material) return;
 
 	kon_mat4_t mvp = kon_mat4Mul(viewProjection, model);
 
+	if (flags & KON_RENDER_WIREFRAME) light = NULL;
+
+	kon_vec3_t toLight = KON_VEC3_ZERO;
+	kon_vec3_t normalMatrix[3] = {KON_VEC3_ZERO, KON_VEC3_ZERO, KON_VEC3_ZERO};
+
+	if (light) {
+		toLight = kon_vec3Scale(kon_vec3Normalize(light->direction), -1.0f);
+
+		/* the cofactor matrix keeps normals perpendicular to the surface even when the model is scaled unevenly */
+		kon_vec3_t c0 = KON_VEC3(model.m[0], model.m[1], model.m[2]);
+		kon_vec3_t c1 = KON_VEC3(model.m[4], model.m[5], model.m[6]);
+		kon_vec3_t c2 = KON_VEC3(model.m[8], model.m[9], model.m[10]);
+		float mirror = (kon_vec3Dot(c0, kon_vec3Cross(c1, c2)) < 0.0f) ? -1.0f : 1.0f;
+
+		normalMatrix[0] = kon_vec3Scale(kon_vec3Cross(c1, c2), mirror);
+		normalMatrix[1] = kon_vec3Scale(kon_vec3Cross(c2, c0), mirror);
+		normalMatrix[2] = kon_vec3Scale(kon_vec3Cross(c0, c1), mirror);
+	}
+
 	for (int i = 0; i < mesh->triangleCount; i++) {
-		kon_drawTriangle3D(fb, mvp,
-			mesh->vertices[mesh->indices[i * 3 + 0]],
-			mesh->vertices[mesh->indices[i * 3 + 1]],
-			mesh->vertices[mesh->indices[i * 3 + 2]],
-			texture, color, flags);
+		const kon_vertex_t *source[3] = {
+			&mesh->vertices[mesh->indices[i * 3 + 0]],
+			&mesh->vertices[mesh->indices[i * 3 + 1]],
+			&mesh->vertices[mesh->indices[i * 3 + 2]]
+		};
+		double brightness[3] = {1.0, 1.0, 1.0};
+
+		if (flags & KON_RENDER_WIREFRAME) {
+			kon_drawTriangle3D(fb, mvp, *source[0], *source[1], *source[2], material, NULL, flags);
+			continue;
+		}
+
+		if (light) {
+			if (flags & KON_RENDER_FLAT) {
+				kon_vec3_t world[3];
+				for (int j = 0; j < 3; j++) world[j] = kon_mat4MulPoint(model, source[j]->position);
+
+				double factor = kon_lightFactor_(light, toLight, kon_faceNormal_(world[0], world[1], world[2]));
+				brightness[0] = brightness[1] = brightness[2] = factor;
+			} else {
+				for (int j = 0; j < 3; j++) {
+					kon_vec3_t n = source[j]->normal;
+					kon_vec3_t worldNormal = kon_vec3Add(kon_vec3Add(kon_vec3Scale(normalMatrix[0], n.x), kon_vec3Scale(normalMatrix[1], n.y)), kon_vec3Scale(normalMatrix[2], n.z));
+					brightness[j] = kon_lightFactor_(light, toLight, worldNormal);
+				}
+			}
+		}
+
+		kon_submitTriangle_(fb, mvp, source, brightness, material, light, flags);
 	}
 }
 
 /*** built-in meshes ***/
 
 static const kon_vertex_t kon_cubeVertices_[24] = {
-	/* +Z */ {{-1, -1,  1}, {0, 1}}, {{ 1, -1,  1}, {1, 1}}, {{ 1,  1,  1}, {1, 0}}, {{-1,  1,  1}, {0, 0}},
-	/* -Z */ {{ 1, -1, -1}, {0, 1}}, {{-1, -1, -1}, {1, 1}}, {{-1,  1, -1}, {1, 0}}, {{ 1,  1, -1}, {0, 0}},
-	/* +X */ {{ 1, -1,  1}, {0, 1}}, {{ 1, -1, -1}, {1, 1}}, {{ 1,  1, -1}, {1, 0}}, {{ 1,  1,  1}, {0, 0}},
-	/* -X */ {{-1, -1, -1}, {0, 1}}, {{-1, -1,  1}, {1, 1}}, {{-1,  1,  1}, {1, 0}}, {{-1,  1, -1}, {0, 0}},
-	/* +Y */ {{-1,  1,  1}, {0, 1}}, {{ 1,  1,  1}, {1, 1}}, {{ 1,  1, -1}, {1, 0}}, {{-1,  1, -1}, {0, 0}},
-	/* -Y */ {{-1, -1, -1}, {0, 1}}, {{ 1, -1, -1}, {1, 1}}, {{ 1, -1,  1}, {1, 0}}, {{-1, -1,  1}, {0, 0}}
+	/* +Z */ {{-1, -1,  1}, {0, 0, 1}, {0, 1}}, {{ 1, -1,  1}, {0, 0, 1}, {1, 1}}, {{ 1,  1,  1}, {0, 0, 1}, {1, 0}}, {{-1,  1,  1}, {0, 0, 1}, {0, 0}},
+	/* -Z */ {{ 1, -1, -1}, {0, 0, -1}, {0, 1}}, {{-1, -1, -1}, {0, 0, -1}, {1, 1}}, {{-1,  1, -1}, {0, 0, -1}, {1, 0}}, {{ 1,  1, -1}, {0, 0, -1}, {0, 0}},
+	/* +X */ {{ 1, -1,  1}, {1, 0, 0}, {0, 1}}, {{ 1, -1, -1}, {1, 0, 0}, {1, 1}}, {{ 1,  1, -1}, {1, 0, 0}, {1, 0}}, {{ 1,  1,  1}, {1, 0, 0}, {0, 0}},
+	/* -X */ {{-1, -1, -1}, {-1, 0, 0}, {0, 1}}, {{-1, -1,  1}, {-1, 0, 0}, {1, 1}}, {{-1,  1,  1}, {-1, 0, 0}, {1, 0}}, {{-1,  1, -1}, {-1, 0, 0}, {0, 0}},
+	/* +Y */ {{-1,  1,  1}, {0, 1, 0}, {0, 1}}, {{ 1,  1,  1}, {0, 1, 0}, {1, 1}}, {{ 1,  1, -1}, {0, 1, 0}, {1, 0}}, {{-1,  1, -1}, {0, 1, 0}, {0, 0}},
+	/* -Y */ {{-1, -1, -1}, {0, -1, 0}, {0, 1}}, {{ 1, -1, -1}, {0, -1, 0}, {1, 1}}, {{ 1, -1,  1}, {0, -1, 0}, {1, 0}}, {{-1, -1,  1}, {0, -1, 0}, {0, 0}}
 };
 
 static const uint16_t kon_cubeIndices_[36] = {
