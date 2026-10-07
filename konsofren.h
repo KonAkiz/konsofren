@@ -35,6 +35,7 @@
 typedef struct kon_framebuffer {
 	int width, height;
 	uint32_t *data;
+	float *depth; /* created the first time something is drawn with KON_RENDER_DEPTH */
 } kon_framebuffer_t;
 
 typedef kon_framebuffer_t kon_image;
@@ -102,6 +103,28 @@ typedef struct kon_wireMesh {
 	const uint16_t *edges;
 	int edgeCount;
 } kon_wireMesh_t;
+
+typedef enum kon_renderFlags {
+	KON_RENDER_NONE = 0,
+	KON_RENDER_WIREFRAME = 1 << 0,
+	KON_RENDER_DEPTH = 1 << 1,
+	KON_RENDER_CULL_BACK = 1 << 2
+} kon_renderFlags_t;
+
+#define KON_RENDER_DEFAULT ((kon_renderFlags_t)(KON_RENDER_DEPTH | KON_RENDER_CULL_BACK))
+
+/* uv (0, 0) is the top-left of the texture, (1, 1) the bottom-right */
+typedef struct kon_vertex {
+	kon_vec3_t position;
+	kon_vec2_t uv;
+} kon_vertex_t;
+
+/* front faces are counter-clockwise, indices hold three entries per triangle */
+typedef struct kon_mesh {
+	const kon_vertex_t *vertices;
+	const uint16_t *indices;
+	int triangleCount;
+} kon_mesh_t;
 
 /*** 2D declarations ***/
 
@@ -214,6 +237,13 @@ int kon_worldToScreen(const kon_framebuffer_t *fb, kon_mat4_t viewProjection, ko
 void kon_drawLine3D(kon_framebuffer_t *fb, kon_mat4_t viewProjection, kon_vec3_t a, kon_vec3_t b, uint32_t color);
 void kon_drawWireMesh(kon_framebuffer_t *fb, kon_mat4_t viewProjection, kon_mat4_t model, const kon_wireMesh_t *mesh, uint32_t color);
 
+/* texture is used when it isn't NULL, otherwise the triangle is filled with color */
+void kon_drawTriangle3D(kon_framebuffer_t *fb, kon_mat4_t viewProjection, kon_vertex_t a, kon_vertex_t b, kon_vertex_t c, const kon_image *texture, uint32_t color, kon_renderFlags_t flags);
+void kon_drawMesh(kon_framebuffer_t *fb, kon_mat4_t viewProjection, kon_mat4_t model, const kon_mesh_t *mesh, const kon_image *texture, uint32_t color, kon_renderFlags_t flags);
+
+/* cube from -1 to 1 with every face mapped to the whole texture */
+extern const kon_mesh_t kon_cubeMesh;
+
 /*** implementation ***/
 
 #ifdef KONSOFREN_IMPLEMENTATION
@@ -297,7 +327,7 @@ static int kon_clipLine_(int width, int height, int *x0, int *y0, int *x1, int *
 /*** framebuffer implementation ***/
 
 kon_framebuffer_t *kon_createFramebuffer(int width, int height) {
-	kon_framebuffer_t *fb = malloc(sizeof(kon_framebuffer_t));
+	kon_framebuffer_t *fb = calloc(1, sizeof(kon_framebuffer_t));
 	if (!fb) return NULL;
 
 	fb->data = calloc((size_t)width * (size_t)height, sizeof(uint32_t));
@@ -315,6 +345,7 @@ void kon_freeFramebuffer(kon_framebuffer_t *fb) {
 	if (!fb) return;
 
 	free(fb->data);
+	free(fb->depth);
 	free(fb);
 }
 
@@ -334,6 +365,12 @@ void kon_clearFramebuffer(kon_framebuffer_t *fb, uint32_t color) {
 		/* did it directly to not check overhead because of the if in bounds check */
 		fb->data[i] = color;
 	}
+
+	if (fb->depth) {
+		for (int i = 0; i < fb->width * fb->height; i++) {
+			fb->depth[i] = 1.0f;
+		}
+	}
 }
 
 void kon_resizeFramebuffer(kon_framebuffer_t *fb, int width, int height) {
@@ -345,6 +382,12 @@ void kon_resizeFramebuffer(kon_framebuffer_t *fb, int width, int height) {
 	fb->data = tmp;
 	fb->width  = width;
 	fb->height = height;
+
+	if (fb->depth) {
+		float *depth = realloc(fb->depth, (size_t)width * (size_t)height * sizeof(float));
+		if (!depth) free(fb->depth);
+		fb->depth = depth;
+	}
 
 	kon_clearFramebuffer(fb, KON_BACKGROUND_COLOR);
 }
@@ -519,7 +562,7 @@ void kon_fillCircle(kon_framebuffer_t *fb, int center_x, int center_y, int radiu
 /*** image implementation ***/
 
 kon_image *kon_loadImage(const uint8_t *pixels, int width, int height, kon_imageFormat_t format) {
-	kon_image *image = malloc(sizeof(kon_image));
+	kon_image *image = calloc(1, sizeof(kon_image));
 	if (!image) return NULL;
 
 	image->data = malloc((size_t)width * (size_t)height * sizeof(uint32_t));
@@ -1006,6 +1049,227 @@ void kon_drawWireMesh(kon_framebuffer_t *fb, kon_mat4_t viewProjection, kon_mat4
 		kon_drawLine3D(fb, mvp, a, b, color);
 	}
 }
+
+/* the triangle rasterizer works in doubles so huge coordinates near the camera don't lose precision */
+typedef struct kon_rasterVertex {
+	double x, y, z, w; /* clip space */
+	double u, v;
+} kon_rasterVertex_t;
+
+static kon_rasterVertex_t kon_lerpRasterVertex_(kon_rasterVertex_t a, kon_rasterVertex_t b, double t) {
+	kon_rasterVertex_t r;
+	r.x = a.x + (b.x - a.x) * t;
+	r.y = a.y + (b.y - a.y) * t;
+	r.z = a.z + (b.z - a.z) * t;
+	r.w = a.w + (b.w - a.w) * t;
+	r.u = a.u + (b.u - a.u) * t;
+	r.v = a.v + (b.v - a.v) * t;
+	return r;
+}
+
+/* keeps the part of the triangle in front of the near plane (z + w >= 0), returns 0 to 4 vertices */
+static int kon_clipNear_(const kon_rasterVertex_t in[3], kon_rasterVertex_t out[4]) {
+	int count = 0;
+
+	for (int i = 0; i < 3; i++) {
+		kon_rasterVertex_t current = in[i];
+		kon_rasterVertex_t next = in[(i + 1) % 3];
+		double dc = current.z + current.w;
+		double dn = next.z + next.w;
+
+		if (dc >= 0.0) out[count++] = current;
+		if ((dc >= 0.0) != (dn >= 0.0)) out[count++] = kon_lerpRasterVertex_(current, next, dc / (dc - dn));
+	}
+
+	return count;
+}
+
+static double kon_edge_(double ax, double ay, double bx, double by, double px, double py) {
+	return (bx - ax) * (py - ay) - (by - ay) * (px - ax);
+}
+
+static void kon_rasterizeTriangle_(kon_framebuffer_t *fb, const kon_rasterVertex_t *a, const kon_rasterVertex_t *b, const kon_rasterVertex_t *c,
+		const kon_image *texture, uint32_t color, kon_renderFlags_t flags) {
+	const kon_rasterVertex_t *in[3] = {a, b, c};
+	double sx[3], sy[3], sz[3], invW[3], uw[3], vw[3];
+
+	for (int i = 0; i < 3; i++) {
+		if (in[i]->w <= 1.0e-12) return;
+		invW[i] = 1.0 / in[i]->w;
+		sx[i] = (in[i]->x * invW[i] + 1.0) * 0.5 * fb->width;
+		sy[i] = (1.0 - in[i]->y * invW[i]) * 0.5 * fb->height;
+		sz[i] = in[i]->z * invW[i];
+		uw[i] = in[i]->u * invW[i];
+		vw[i] = in[i]->v * invW[i];
+	}
+
+	/* screen +Y points down, so a counter-clockwise (front) triangle has a negative area here */
+	double area = kon_edge_(sx[0], sy[0], sx[1], sy[1], sx[2], sy[2]);
+	if (area == 0.0) return;
+
+	if (area > 0.0) {
+		if (flags & KON_RENDER_CULL_BACK) return;
+
+		/* back face with culling off: swap two vertices so the math below only deals with one winding */
+		double t;
+		t = sx[1]; sx[1] = sx[2]; sx[2] = t;
+		t = sy[1]; sy[1] = sy[2]; sy[2] = t;
+		t = sz[1]; sz[1] = sz[2]; sz[2] = t;
+		t = invW[1]; invW[1] = invW[2]; invW[2] = t;
+		t = uw[1]; uw[1] = uw[2]; uw[2] = t;
+		t = vw[1]; vw[1] = vw[2]; vw[2] = t;
+		area = -area;
+	}
+
+	double minX = sx[0], maxX = sx[0], minY = sy[0], maxY = sy[0];
+	for (int i = 1; i < 3; i++) {
+		if (sx[i] < minX) minX = sx[i];
+		if (sx[i] > maxX) maxX = sx[i];
+		if (sy[i] < minY) minY = sy[i];
+		if (sy[i] > maxY) maxY = sy[i];
+	}
+
+	/* pixel centers sit at +0.5, clamped to the framebuffer before turning into ints */
+	minX = ceil(minX - 0.5); maxX = floor(maxX - 0.5);
+	minY = ceil(minY - 0.5); maxY = floor(maxY - 0.5);
+	if (minX < 0) minX = 0;
+	if (minY < 0) minY = 0;
+	if (maxX > fb->width  - 1) maxX = fb->width  - 1;
+	if (maxY > fb->height - 1) maxY = fb->height - 1;
+	if (minX > maxX || minY > maxY) return;
+
+	int x0 = (int)minX, x1 = (int)maxX, y0 = (int)minY, y1 = (int)maxY;
+	double px = x0 + 0.5, py = y0 + 0.5;
+
+	/* edge i is opposite vertex i, inside means all three are <= 0 for this winding */
+	double e0Row = kon_edge_(sx[1], sy[1], sx[2], sy[2], px, py);
+	double e1Row = kon_edge_(sx[2], sy[2], sx[0], sy[0], px, py);
+	double e2Row = kon_edge_(sx[0], sy[0], sx[1], sy[1], px, py);
+	double e0Dx = -(sy[2] - sy[1]), e0Dy = sx[2] - sx[1];
+	double e1Dx = -(sy[0] - sy[2]), e1Dy = sx[0] - sx[2];
+	double e2Dx = -(sy[1] - sy[0]), e2Dy = sx[1] - sx[0];
+	double invArea = 1.0 / area;
+
+	int useDepth = (flags & KON_RENDER_DEPTH) != 0;
+
+	for (int y = y0; y <= y1; y++) {
+		double e0 = e0Row, e1 = e1Row, e2 = e2Row;
+
+		for (int x = x0; x <= x1; x++) {
+			if (e0 <= 0.0 && e1 <= 0.0 && e2 <= 0.0) {
+				double l0 = e0 * invArea, l1 = e1 * invArea, l2 = e2 * invArea;
+				size_t index = (size_t)y * (size_t)fb->width + (size_t)x;
+				double z = l0 * sz[0] + l1 * sz[1] + l2 * sz[2];
+
+				if (!useDepth || z < (double)fb->depth[index]) {
+					uint32_t texel = color;
+
+					if (texture) {
+						/* uv / w is what varies linearly on screen, dividing by 1 / w again undoes the perspective */
+						double iw = l0 * invW[0] + l1 * invW[1] + l2 * invW[2];
+						double u = (l0 * uw[0] + l1 * uw[1] + l2 * uw[2]) / iw;
+						double v = (l0 * vw[0] + l1 * vw[1] + l2 * vw[2]) / iw;
+
+						u -= floor(u);
+						v -= floor(v);
+
+						int tx = (int)(u * texture->width);
+						int ty = (int)(v * texture->height);
+						if (tx > texture->width  - 1) tx = texture->width  - 1;
+						if (ty > texture->height - 1) ty = texture->height - 1;
+
+						texel = texture->data[(size_t)ty * (size_t)texture->width + (size_t)tx];
+					}
+
+					uint32_t alpha = texel >> 24;
+					if (alpha == 0xFF) {
+						fb->data[index] = texel;
+						if (useDepth) fb->depth[index] = (float)z;
+					} else if (alpha != 0) {
+						fb->data[index] = kon_blendColor(fb->data[index], texel);
+					}
+				}
+			}
+
+			e0 += e0Dx; e1 += e1Dx; e2 += e2Dx;
+		}
+
+		e0Row += e0Dy; e1Row += e1Dy; e2Row += e2Dy;
+	}
+}
+
+void kon_drawTriangle3D(kon_framebuffer_t *fb, kon_mat4_t viewProjection, kon_vertex_t a, kon_vertex_t b, kon_vertex_t c,
+		const kon_image *texture, uint32_t color, kon_renderFlags_t flags) {
+	if (!fb) return;
+
+	if (flags & KON_RENDER_WIREFRAME) {
+		kon_drawLine3D(fb, viewProjection, a.position, b.position, color);
+		kon_drawLine3D(fb, viewProjection, b.position, c.position, color);
+		kon_drawLine3D(fb, viewProjection, c.position, a.position, color);
+		return;
+	}
+
+	if ((flags & KON_RENDER_DEPTH) && !fb->depth) {
+		fb->depth = malloc((size_t)fb->width * (size_t)fb->height * sizeof(float));
+		if (!fb->depth) return;
+
+		for (int i = 0; i < fb->width * fb->height; i++) {
+			fb->depth[i] = 1.0f;
+		}
+	}
+
+	const kon_vertex_t *source[3] = {&a, &b, &c};
+	kon_rasterVertex_t in[3], clipped[4];
+
+	for (int i = 0; i < 3; i++) {
+		kon_vec4_t clip = kon_mat4MulVec4(viewProjection, KON_VEC4(source[i]->position.x, source[i]->position.y, source[i]->position.z, 1));
+		in[i].x = clip.x; in[i].y = clip.y; in[i].z = clip.z; in[i].w = clip.w;
+		in[i].u = source[i]->uv.x;
+		in[i].v = source[i]->uv.y;
+	}
+
+	int count = kon_clipNear_(in, clipped);
+	for (int i = 1; i + 1 < count; i++) {
+		kon_rasterizeTriangle_(fb, &clipped[0], &clipped[i], &clipped[i + 1], texture, color, flags);
+	}
+}
+
+void kon_drawMesh(kon_framebuffer_t *fb, kon_mat4_t viewProjection, kon_mat4_t model, const kon_mesh_t *mesh,
+		const kon_image *texture, uint32_t color, kon_renderFlags_t flags) {
+	if (!fb || !mesh) return;
+
+	kon_mat4_t mvp = kon_mat4Mul(viewProjection, model);
+
+	for (int i = 0; i < mesh->triangleCount; i++) {
+		kon_drawTriangle3D(fb, mvp,
+			mesh->vertices[mesh->indices[i * 3 + 0]],
+			mesh->vertices[mesh->indices[i * 3 + 1]],
+			mesh->vertices[mesh->indices[i * 3 + 2]],
+			texture, color, flags);
+	}
+}
+
+/*** built-in meshes ***/
+
+static const kon_vertex_t kon_cubeVertices_[24] = {
+	/* +Z */ {{-1, -1,  1}, {0, 1}}, {{ 1, -1,  1}, {1, 1}}, {{ 1,  1,  1}, {1, 0}}, {{-1,  1,  1}, {0, 0}},
+	/* -Z */ {{ 1, -1, -1}, {0, 1}}, {{-1, -1, -1}, {1, 1}}, {{-1,  1, -1}, {1, 0}}, {{ 1,  1, -1}, {0, 0}},
+	/* +X */ {{ 1, -1,  1}, {0, 1}}, {{ 1, -1, -1}, {1, 1}}, {{ 1,  1, -1}, {1, 0}}, {{ 1,  1,  1}, {0, 0}},
+	/* -X */ {{-1, -1, -1}, {0, 1}}, {{-1, -1,  1}, {1, 1}}, {{-1,  1,  1}, {1, 0}}, {{-1,  1, -1}, {0, 0}},
+	/* +Y */ {{-1,  1,  1}, {0, 1}}, {{ 1,  1,  1}, {1, 1}}, {{ 1,  1, -1}, {1, 0}}, {{-1,  1, -1}, {0, 0}},
+	/* -Y */ {{-1, -1, -1}, {0, 1}}, {{ 1, -1, -1}, {1, 1}}, {{ 1, -1,  1}, {1, 0}}, {{-1, -1,  1}, {0, 0}}
+};
+
+static const uint16_t kon_cubeIndices_[36] = {
+	0, 1, 2,  0, 2, 3,
+	4, 5, 6,  4, 6, 7,
+	8, 9, 10,  8, 10, 11,
+	12, 13, 14,  12, 14, 15,
+	16, 17, 18,  16, 18, 19,
+	20, 21, 22,  20, 22, 23
+};
+
+const kon_mesh_t kon_cubeMesh = { kon_cubeVertices_, kon_cubeIndices_, 12 };
 
 #endif /* end of KONSOFREN_IMPLEMENTATION */
 
